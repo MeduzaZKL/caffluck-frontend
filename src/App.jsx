@@ -1,0 +1,248 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import MapView from './components/MapView';
+import DetailsPanel from './components/DetailsPanel';
+import TripMeta from './components/TripMeta';
+import { api } from './lib/api';
+import { fetchRoute } from './lib/routing';
+import { SEARCH_RADIUS_M } from './lib/config';
+import { useGeolocation } from './hooks/useGeolocation';
+import { useMediaQuery } from './hooks/useMediaQuery';
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export default function App() {
+  const geo = useGeolocation();
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+
+  const [shops, setShops] = useState([]);
+  const [shopsLoading, setShopsLoading] = useState(false);
+  const [selected, setSelected] = useState(null); // basic shop, later merged with the full detail (menu)
+  const [sheet, setSheet] = useState('closed'); // mobile bottom sheet: 'closed' | 'peek' | 'expanded'
+  const [route, setRoute] = useState(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [rolling, setRolling] = useState(false);
+  const [visitedBusy, setVisitedBusy] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const detailCtrl = useRef(null);
+  const showToast = useCallback((message) => setToast({ id: Date.now(), message }), []);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(null), 4500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // --- load pins around the user ---
+  const lat = geo.pos?.lat;
+  const lng = geo.pos?.lng;
+  useEffect(() => {
+    if (lat == null) return undefined;
+    const ctrl = new AbortController();
+    setShopsLoading(true);
+    api
+      .shops(lat, lng, SEARCH_RADIUS_M, ctrl.signal)
+      .then((res) => setShops(res.shops))
+      .catch((err) => {
+        if (err.name !== 'AbortError') showToast(`Couldn't load cafes: ${err.message}`);
+      })
+      .finally(() => {
+        if (!ctrl.signal.aborted) setShopsLoading(false);
+      });
+    return () => ctrl.abort();
+  }, [lat, lng, showToast]);
+
+  // --- draw a route whenever the selected shop (or the user's position) changes ---
+  const selectedId = selected?.id ?? null;
+  const selectedLat = selected?.lat;
+  const selectedLng = selected?.lng;
+  useEffect(() => {
+    setRoute(null);
+    if (selectedId == null || lat == null) {
+      setRouteLoading(false);
+      return undefined;
+    }
+    const ctrl = new AbortController();
+    setRouteLoading(true);
+    fetchRoute(
+      [
+        { lat, lng },
+        // Intermediate waypoints can be inserted here, e.g. { lat: 14.6, lng: 121.0 }
+        { lat: selectedLat, lng: selectedLng },
+      ],
+      { signal: ctrl.signal },
+    )
+      .then((r) => setRoute(r))
+      .catch(() => {})
+      .finally(() => {
+        if (!ctrl.signal.aborted) setRouteLoading(false);
+      });
+    return () => ctrl.abort();
+  }, [selectedId, selectedLat, selectedLng, lat, lng]);
+
+  // --- selection helpers ---
+  const deselect = useCallback(() => {
+    detailCtrl.current?.abort();
+    setSelected(null);
+    setSheet('closed');
+  }, []);
+
+  const selectShop = useCallback(
+    (id) => {
+      const basic = shops.find((s) => s.id === id);
+      if (!basic) return;
+      setSelected(basic);
+      setSheet((s) => (s === 'closed' ? 'peek' : s));
+      detailCtrl.current?.abort();
+      const ctrl = new AbortController();
+      detailCtrl.current = ctrl;
+      api
+        .shop(id, ctrl.signal)
+        .then(({ shop }) => setSelected((cur) => (cur?.id === id ? { ...cur, ...shop } : cur)))
+        .catch((err) => {
+          if (err.name !== 'AbortError') showToast(`Couldn't load the menu: ${err.message}`);
+        });
+    },
+    [shops, showToast],
+  );
+
+  // --- "Randomize Me!" ---
+  const roll = async () => {
+    if (!geo.pos || rolling) return;
+    setRolling(true);
+    try {
+      const [res] = await Promise.all([api.roll(geo.pos.lat, geo.pos.lng, SEARCH_RADIUS_M), sleep(600)]);
+      if (res.status === 'ok') {
+        detailCtrl.current?.abort();
+        setShops((prev) => (prev.some((s) => s.id === res.shop.id) ? prev : [...prev, res.shop]));
+        setSelected(res.shop);
+        setSheet('peek');
+      } else if (res.status === 'all_visited') {
+        showToast("You've been to every cafe around here! 🎉 Come back when new ones open.");
+      } else {
+        showToast('No cafes found nearby.');
+      }
+    } catch (err) {
+      showToast(`Couldn't roll: ${err.message}`);
+    } finally {
+      setRolling(false);
+    }
+  };
+
+  // --- "I Already Go There" ---
+  const markVisited = async () => {
+    if (!selected || visitedBusy) return;
+    setVisitedBusy(true);
+    try {
+      await api.markVisited(selected.id);
+      setShops((prev) => prev.map((s) => (s.id === selected.id ? { ...s, visited: true } : s)));
+      showToast(`Saved! We won't suggest ${selected.name} again.`);
+      deselect();
+    } catch (err) {
+      showToast(`Couldn't save: ${err.message}`);
+    } finally {
+      setVisitedBusy(false);
+    }
+  };
+
+  // Keep the route clear of the bottom sheet when the map fits it into view.
+  const padding = useMemo(
+    () =>
+      isDesktop
+        ? { top: 70, right: 60, bottom: 110, left: 60 }
+        : { top: 110, right: 28, bottom: Math.round(window.innerHeight * (sheet === 'expanded' ? 0.88 : 0.5)) + 24, left: 28 },
+    [isDesktop, sheet],
+  );
+
+  if (!geo.pos) {
+    return (
+      <div className="app-root flex h-screen w-screen flex-col items-center justify-center gap-4 bg-cream text-forest">
+        <div className="flex h-16 w-16 animate-bounce items-center justify-center rounded-2xl bg-forest text-3xl shadow-lg">☕</div>
+        <p className="text-sm font-semibold">Finding your location…</p>
+      </div>
+    );
+  }
+
+  const rollBottom = sheet === 'closed' ? 'bottom-6' : 'bottom-[calc(50dvh+1rem)]';
+
+  return (
+    <div className="app-root flex h-screen w-screen flex-col overflow-hidden bg-cream font-sans md:flex-row">
+      <DetailsPanel
+        sheet={sheet}
+        onSheetChange={setSheet}
+        shop={selected}
+        route={route}
+        routeLoading={routeLoading}
+        busy={visitedBusy}
+        onVisited={markVisited}
+        onClose={deselect}
+      />
+
+      {/* Map area: full screen on mobile, the remaining width next to the sidebar on desktop */}
+      <main className="relative z-0 min-w-0 flex-1">
+        <MapView
+          userPos={geo.pos}
+          shops={shops}
+          selectedId={selectedId}
+          route={route}
+          padding={padding}
+          onSelect={selectShop}
+        />
+
+        {/* Top overlay: brand, mobile trip card, status */}
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-col items-start gap-2 md:right-auto md:max-w-sm">
+          <span
+            className={`pointer-events-auto items-center gap-2 rounded-full bg-forest px-4 py-2 text-sm font-extrabold tracking-wide text-white shadow-lg ${
+              selected ? 'hidden md:inline-flex' : 'inline-flex'
+            }`}
+          >
+            ☕ Caffluck
+          </span>
+
+          {selected && (
+            <div className="pointer-events-auto w-full md:hidden">
+              <TripMeta route={route} loading={routeLoading} variant="card" />
+            </div>
+          )}
+
+          {geo.status === 'denied' || geo.status === 'unsupported' ? (
+            <div className="pointer-events-auto flex items-center gap-2 rounded-2xl bg-crisp/95 px-3 py-2 text-xs font-medium text-forest shadow-lg backdrop-blur">
+              <span>📍 Location unavailable — showing a default area.</span>
+              <button onClick={geo.retry} className="rounded-full bg-mint px-2.5 py-1 font-bold text-white">
+                Retry
+              </button>
+            </div>
+          ) : (
+            shopsLoading && (
+              <div className="pointer-events-auto rounded-full bg-crisp/95 px-3 py-1.5 text-xs font-semibold text-forest shadow-lg" role="status">
+                Finding cafes nearby…
+              </div>
+            )
+          )}
+        </div>
+
+        {/* Randomize button */}
+        <button
+          onClick={roll}
+          disabled={rolling}
+          className={`absolute left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-forest px-7 py-3.5 text-base font-extrabold text-white shadow-xl shadow-forest/30 transition-all duration-300 hover:bg-forest/90 active:scale-95 disabled:opacity-80 md:bottom-8 ${rollBottom} ${
+            sheet === 'expanded' ? 'max-md:hidden' : ''
+          }`}
+        >
+          <span className={`mr-2 inline-block ${rolling ? 'animate-spin' : ''}`}>🎲</span>
+          {rolling ? 'Rolling…' : 'Randomize Me!'}
+        </button>
+      </main>
+
+      {toast && (
+        <div
+          key={toast.id}
+          role="status"
+          className="fixed left-1/2 top-[4.75rem] z-50 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-2xl bg-forest px-4 py-3 text-sm font-medium text-white shadow-2xl md:top-6"
+        >
+          {toast.message}
+        </div>
+      )}
+    </div>
+  );
+}
