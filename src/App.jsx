@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import MapView from './components/MapView';
 import DetailsPanel from './components/DetailsPanel';
 import TripMeta from './components/TripMeta';
@@ -347,6 +348,7 @@ export default function App() {
           {toast.message}
         </div>
       )}
+      <Analytics />
     </div>
   );
 }
