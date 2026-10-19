@@ -1,7 +1,12 @@
-/** 5.8 -> "$5.8", 6 -> "$6.0", 6.35 -> "$6.35" */
+/** Philippine pesos: 120 -> "₱120", 135.5 -> "₱135.50" */
 export function formatPrice(n) {
-  const s = Number(n).toFixed(2);
-  return `$${s.endsWith('0') ? s.slice(0, -1) : s}`;
+  const v = Number(n);
+  return new Intl.NumberFormat('en-PH', {
+    style: 'currency',
+    currency: 'PHP',
+    minimumFractionDigits: Number.isInteger(v) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(v);
 }
 
 export function formatDistance(meters) {
