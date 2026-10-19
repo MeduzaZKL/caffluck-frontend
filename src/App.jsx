@@ -123,6 +123,8 @@ export default function App() {
         setSheet('peek');
       } else if (res.status === 'all_visited') {
         showToast("You've been to every cafe around here! 🎉 Come back when new ones open.");
+      } else if (res.status === 'unavailable') {
+        showToast('The cafe map data is busy right now. Please try again in a minute.');
       } else {
         showToast('No cafes found nearby.');
       }
