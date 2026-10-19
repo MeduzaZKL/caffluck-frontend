@@ -3,6 +3,8 @@ import MapView from './components/MapView';
 import DetailsPanel from './components/DetailsPanel';
 import TripMeta from './components/TripMeta';
 import ReviewModal from './components/ReviewModal';
+import StatusNotice from './components/StatusNotice';
+import SkeletonPins from './components/SkeletonPins';
 import { api } from './lib/api';
 import { fetchRoute } from './lib/routing';
 import { SEARCH_RADIUS_M } from './lib/config';
@@ -27,6 +29,9 @@ export default function App() {
   const [areaView, setAreaView] = useState(null); // map moved away from the searched area: { lat, lng, radiusM }
   const [areaBusy, setAreaBusy] = useState(false);
   const [reviewPrompt, setReviewPrompt] = useState(null); // shop to rate right after "I Already Go There"
+  const [notice, setNotice] = useState(null); // { kind: 'empty'|'busy'|'error', retry: 'load'|'roll'|'area' }
+  const [reloadKey, setReloadKey] = useState(0); // bump to re-run the initial café load (Retry)
+  const [slow, setSlow] = useState(false); // a request is taking long (free server waking up)
 
   const detailCtrl = useRef(null);
   const showToast = useCallback((message) => setToast({ id: Date.now(), message }), []);
@@ -44,17 +49,31 @@ export default function App() {
     if (lat == null) return undefined;
     const ctrl = new AbortController();
     setShopsLoading(true);
+    setNotice((n) => (n?.retry === 'load' ? null : n));
     api
       .shops(lat, lng, SEARCH_RADIUS_M, ctrl.signal)
-      .then((res) => setShops(res.shops))
+      .then((res) => {
+        setShops(res.shops);
+        if (res.shops.length === 0) setNotice({ kind: res.areaStatus === 'failed' ? 'busy' : 'empty', retry: 'load' });
+      })
       .catch((err) => {
-        if (err.name !== 'AbortError') showToast(`Couldn't load cafes: ${err.message}`);
+        if (err.name !== 'AbortError') setNotice({ kind: 'error', retry: 'load' });
       })
       .finally(() => {
         if (!ctrl.signal.aborted) setShopsLoading(false);
       });
     return () => ctrl.abort();
-  }, [lat, lng, showToast]);
+  }, [lat, lng, reloadKey]);
+
+  // After 8 s of waiting, explain why (free servers sleep when idle).
+  useEffect(() => {
+    if (!shopsLoading && !rolling) {
+      setSlow(false);
+      return undefined;
+    }
+    const t = setTimeout(() => setSlow(true), 8000);
+    return () => clearTimeout(t);
+  }, [shopsLoading, rolling]);
 
   // --- draw a route whenever the selected shop (or the user's position) changes ---
   const selectedId = selected?.id ?? null;
@@ -114,6 +133,7 @@ export default function App() {
   const roll = async () => {
     if (!geo.pos || rolling) return;
     setRolling(true);
+    setNotice(null);
     try {
       const [res] = await Promise.all([api.roll(geo.pos.lat, geo.pos.lng, SEARCH_RADIUS_M), sleep(600)]);
       if (res.status === 'ok') {
@@ -124,12 +144,12 @@ export default function App() {
       } else if (res.status === 'all_visited') {
         showToast("You've been to every cafe around here! 🎉 Come back when new ones open.");
       } else if (res.status === 'unavailable') {
-        showToast('The cafe map data is busy right now. Please try again in a minute.');
+        setNotice({ kind: 'busy', retry: 'roll' });
       } else {
-        showToast('No cafes found nearby.');
+        setNotice({ kind: 'empty', retry: 'roll' });
       }
-    } catch (err) {
-      showToast(`Couldn't roll: ${err.message}`);
+    } catch {
+      setNotice({ kind: 'error', retry: 'roll' });
     } finally {
       setRolling(false);
     }
@@ -152,6 +172,16 @@ export default function App() {
     }
   };
 
+  const retry = () => {
+    const what = notice?.retry;
+    if (what === 'roll') roll();
+    else if (what === 'area') searchArea();
+    else {
+      setNotice(null);
+      setReloadKey((k) => k + 1);
+    }
+  };
+
   // Patch a shop's rating everywhere after the user posts a review.
   const applyRating = useCallback((id, patch) => {
     setShops((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -170,10 +200,14 @@ export default function App() {
         for (const s of keep) if (!merged.some((m) => m.id === s.id)) merged.push(s);
         return merged;
       });
-      if (res.shops.length === 0) showToast('No cafes found in this area.');
-      setAreaView(null);
-    } catch (err) {
-      showToast(`Couldn't search here: ${err.message}`);
+      if (res.shops.length === 0) {
+        setNotice({ kind: res.areaStatus === 'failed' ? 'busy' : 'empty', retry: 'area' }); // keep areaView so Retry works
+      } else {
+        setNotice(null);
+        setAreaView(null);
+      }
+    } catch {
+      setNotice({ kind: 'error', retry: 'area' });
     } finally {
       setAreaBusy(false);
     }
@@ -224,6 +258,7 @@ export default function App() {
           onSelect={selectShop}
           onAreaMoved={setAreaView}
         />
+        {shopsLoading && shops.length === 0 && <SkeletonPins />}
 
         {/* Top overlay: brand, mobile trip card, status */}
         <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-col items-start gap-2 md:right-auto md:max-w-sm">
@@ -241,24 +276,33 @@ export default function App() {
             </div>
           )}
 
-          {geo.status === 'denied' || geo.status === 'unsupported' ? (
+          {(geo.status === 'denied' || geo.status === 'unsupported') && (
             <div className="pointer-events-auto flex items-center gap-2 rounded-2xl bg-crisp/95 px-3 py-2 text-xs font-medium text-forest shadow-lg backdrop-blur">
               <span>📍 Location unavailable — showing a default area.</span>
               <button onClick={geo.retry} className="rounded-full bg-mint px-2.5 py-1 font-bold text-white">
                 Retry
               </button>
             </div>
-          ) : (
-            shopsLoading && (
-              <div className="pointer-events-auto rounded-full bg-crisp/95 px-3 py-1.5 text-xs font-semibold text-forest shadow-lg" role="status">
-                Finding cafes nearby…
-              </div>
-            )
+          )}
+
+          {(shopsLoading || areaBusy) && (
+            <div className="pointer-events-auto rounded-2xl bg-crisp/95 px-3 py-1.5 text-xs font-semibold text-forest shadow-lg" role="status">
+              {slow ? 'Still working… the free server may be waking up (up to a minute).' : 'Finding cafes nearby…'}
+            </div>
+          )}
+
+          {notice && !shopsLoading && (
+            <StatusNotice
+              kind={notice.kind}
+              retrying={rolling || areaBusy}
+              onRetry={retry}
+              onDismiss={() => setNotice(null)}
+            />
           )}
         </div>
 
         {/* Google-style "Search this area" pill */}
-        {areaView && (
+        {areaView && !notice && (
           <button
             onClick={searchArea}
             disabled={areaBusy}
@@ -277,7 +321,7 @@ export default function App() {
           }`}
         >
           <span className={`mr-2 inline-block ${rolling ? 'animate-spin' : ''}`}>🎲</span>
-          {rolling ? 'Rolling…' : 'Randomize Me!'}
+          {rolling ? (slow ? 'Waking the server…' : 'Rolling…') : 'Randomize Me!'}
         </button>
       </main>
 

@@ -3,12 +3,19 @@ import { getUserId } from './uid';
 const BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
 async function request(path, { method = 'GET', body, signal } = {}) {
-  const res = await fetch(`${BASE}/api${path}`, {
-    method,
-    signal,
-    headers: { 'Content-Type': 'application/json', 'x-caffluck-uid': getUserId() },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`${BASE}/api${path}`, {
+      method,
+      signal,
+      headers: { 'Content-Type': 'application/json', 'x-caffluck-uid': getUserId() },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') throw err;
+    // Network failure, CORS block or a sleeping server: tag it so the UI can show "API unavailable".
+    throw Object.assign(new Error('The server can’t be reached.'), { unreachable: true });
+  }
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
     try {
@@ -16,7 +23,7 @@ async function request(path, { method = 'GET', body, signal } = {}) {
     } catch {
       /* non-JSON error body */
     }
-    throw new Error(message);
+    throw Object.assign(new Error(message), { status: res.status, unreachable: res.status >= 502 });
   }
   return res.json();
 }
