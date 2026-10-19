@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MapView from './components/MapView';
 import DetailsPanel from './components/DetailsPanel';
 import TripMeta from './components/TripMeta';
+import ReviewModal from './components/ReviewModal';
 import { api } from './lib/api';
 import { fetchRoute } from './lib/routing';
 import { SEARCH_RADIUS_M } from './lib/config';
@@ -23,6 +24,9 @@ export default function App() {
   const [rolling, setRolling] = useState(false);
   const [visitedBusy, setVisitedBusy] = useState(false);
   const [toast, setToast] = useState(null);
+  const [areaView, setAreaView] = useState(null); // map moved away from the searched area: { lat, lng, radiusM }
+  const [areaBusy, setAreaBusy] = useState(false);
+  const [reviewPrompt, setReviewPrompt] = useState(null); // shop to rate right after "I Already Go There"
 
   const detailCtrl = useRef(null);
   const showToast = useCallback((message) => setToast({ id: Date.now(), message }), []);
@@ -137,11 +141,39 @@ export default function App() {
       await api.markVisited(selected.id);
       setShops((prev) => prev.map((s) => (s.id === selected.id ? { ...s, visited: true } : s)));
       showToast(`Saved! We won't suggest ${selected.name} again.`);
+      setReviewPrompt({ id: selected.id, name: selected.name });
       deselect();
     } catch (err) {
       showToast(`Couldn't save: ${err.message}`);
     } finally {
       setVisitedBusy(false);
+    }
+  };
+
+  // Patch a shop's rating everywhere after the user posts a review.
+  const applyRating = useCallback((id, patch) => {
+    setShops((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    setSelected((cur) => (cur?.id === id ? { ...cur, ...patch } : cur));
+  }, []);
+
+  // "Search this area": load cafes around the current map center and merge them into the pins.
+  const searchArea = async () => {
+    if (!areaView || areaBusy) return;
+    setAreaBusy(true);
+    try {
+      const res = await api.shops(areaView.lat, areaView.lng, areaView.radiusM);
+      setShops((prev) => {
+        const keep = prev.filter((s) => s.id === selectedId); // never drop the open cafe's pin
+        const merged = [...res.shops];
+        for (const s of keep) if (!merged.some((m) => m.id === s.id)) merged.push(s);
+        return merged;
+      });
+      if (res.shops.length === 0) showToast('No cafes found in this area.');
+      setAreaView(null);
+    } catch (err) {
+      showToast(`Couldn't search here: ${err.message}`);
+    } finally {
+      setAreaBusy(false);
     }
   };
 
@@ -176,6 +208,7 @@ export default function App() {
         busy={visitedBusy}
         onVisited={markVisited}
         onClose={deselect}
+        onRated={applyRating}
       />
 
       {/* Map area: full screen on mobile, the remaining width next to the sidebar on desktop */}
@@ -187,6 +220,7 @@ export default function App() {
           route={route}
           padding={padding}
           onSelect={selectShop}
+          onAreaMoved={setAreaView}
         />
 
         {/* Top overlay: brand, mobile trip card, status */}
@@ -221,6 +255,17 @@ export default function App() {
           )}
         </div>
 
+        {/* Google-style "Search this area" pill */}
+        {areaView && (
+          <button
+            onClick={searchArea}
+            disabled={areaBusy}
+            className="absolute left-1/2 top-16 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-crisp px-4 py-2 text-sm font-bold text-forest shadow-lg ring-1 ring-forest/10 transition hover:bg-cream active:scale-95 md:top-4"
+          >
+            {areaBusy ? 'Searching…' : '↻ Search this area'}
+          </button>
+        )}
+
         {/* Randomize button */}
         <button
           onClick={roll}
@@ -233,6 +278,19 @@ export default function App() {
           {rolling ? 'Rolling…' : 'Randomize Me!'}
         </button>
       </main>
+
+      {reviewPrompt && (
+        <ReviewModal
+          shop={reviewPrompt}
+          title="How was it?"
+          onClose={() => setReviewPrompt(null)}
+          onSaved={(res) => {
+            applyRating(reviewPrompt.id, { rating: res.rating, reviewCount: res.reviewCount });
+            setReviewPrompt(null);
+            showToast('Thanks for your review! ⭐');
+          }}
+        />
+      )}
 
       {toast && (
         <div

@@ -16,3 +16,7 @@ export function etaRange(seconds) {
   const hi = Math.max(lo + 1, Math.round(m * 1.25));
   return `${lo}–${hi} min`;
 }
+
+export function formatReviewDate(iso) {
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}

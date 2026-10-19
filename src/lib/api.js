@@ -25,6 +25,8 @@ export const api = {
   shops: (lat, lng, radius, signal) => request(`/shops?lat=${lat}&lng=${lng}&radius=${radius}`, { signal }),
   shop: (id, signal) => request(`/shops/${id}`, { signal }),
   roll: (lat, lng, radius) => request('/roll', { method: 'POST', body: { lat, lng, radius } }),
+  reviews: (shopId, signal) => request(`/shops/${shopId}/reviews`, { signal }),
+  postReview: (shopId, body) => request(`/shops/${shopId}/reviews`, { method: 'POST', body }),
   visited: () => request('/visited'),
   markVisited: (shopId) => request('/visited', { method: 'POST', body: { shopId } }),
 };

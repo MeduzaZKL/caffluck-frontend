@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import RatingBadge from './RatingBadge';
 import TripMeta from './TripMeta';
 import CategoryChips from './CategoryChips';
 import MenuCard from './MenuCard';
 import OrderModal from './OrderModal';
 import PhotoLightbox from './PhotoLightbox';
+import ReviewsPanel from './ReviewsPanel';
+import ReviewModal from './ReviewModal';
+import { api } from '../lib/api';
 import { formatPrice } from '../lib/format';
 
 const CATEGORIES = [
@@ -16,13 +19,26 @@ const CATEGORIES = [
  * Everything inside the details panel: header profile, category chips, menu grid, action bar.
  * Rendered with key={shop.id} by the parent, so the cart resets whenever the shop changes.
  */
-export default function ShopDetails({ shop, route, routeLoading, busy, onVisited, onClose }) {
+export default function ShopDetails({ shop, route, routeLoading, busy, onVisited, onClose, onRated }) {
   const menu = shop.menu ?? null; // null while the menu is still loading
   const [category, setCategory] = useState('beverage');
   const [cart, setCart] = useState({}); // itemId -> { size, qty }
   const [orderOpen, setOrderOpen] = useState(false);
   const [photo, setPhoto] = useState(null); // { src, title } shown in the lightbox
   const [boardFailed, setBoardFailed] = useState(false);
+  const [tab, setTab] = useState('menu'); // 'menu' | 'reviews'
+  const [reviews, setReviews] = useState(null); // null = not loaded yet
+  const [reviewOpen, setReviewOpen] = useState(false);
+
+  useEffect(() => {
+    if (tab !== 'reviews' || reviews !== null) return undefined;
+    const ctrl = new AbortController();
+    api
+      .reviews(shop.id, ctrl.signal)
+      .then((r) => setReviews(r.reviews))
+      .catch(() => setReviews([]));
+    return () => ctrl.abort();
+  }, [tab, reviews, shop.id]);
 
   const chips = useMemo(
     () => CATEGORIES.map((c) => ({ ...c, count: menu ? menu.filter((i) => i.category === c.key).length : 0 })),
@@ -50,6 +66,9 @@ export default function ShopDetails({ shop, route, routeLoading, busy, onVisited
   const total = lines.reduce((n, l) => n + l.qty * l.unit, 0);
 
   const navigateUrl = `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=%3B${shop.lat}%2C${shop.lng}`;
+  // Google Maps search link: no API key needed. Opens the cafe's Google listing (ratings, photos, menu, reviews).
+  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${shop.name} ${shop.lat},${shop.lng}`)}`;
+  const photos = shop.photos ?? [];
   const navigate = () => window.open(navigateUrl, '_blank', 'noopener');
 
   return (
@@ -64,26 +83,135 @@ export default function ShopDetails({ shop, route, routeLoading, busy, onVisited
           ✕
         </button>
         <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-mint">
-          {shop.source === 'demo' ? 'Demo cafe' : 'Your pick'}
+          Your pick
         </p>
         <h2 className="pr-24 text-2xl font-extrabold leading-tight">{shop.name}</h2>
         <p className="mt-1 pr-24 text-sm text-white/70">{shop.address}</p>
+        <p className="mt-1 text-xs text-white/70">
+          {shop.reviewCount > 0
+            ? `${shop.reviewCount} review${shop.reviewCount === 1 ? '' : 's'}`
+            : 'No reviews yet'}
+          {shop.hours?.label && (
+            <>
+              {' · '}
+              <span className={`font-bold ${shop.hours.openNow ? 'text-mint' : 'text-red-300'}`}>{shop.hours.label}</span>
+            </>
+          )}
+        </p>
         <div className="mt-3 hidden md:block">
           <TripMeta route={route} loading={routeLoading} variant="inline" />
         </div>
-        <RatingBadge rating={shop.rating} className="absolute -bottom-4 right-5" />
+        {shop.rating != null && <RatingBadge rating={shop.rating} className="absolute -bottom-4 right-5" />}
       </header>
 
       {/* Chips + menu */}
       <div className="flex min-h-0 flex-1 flex-col bg-forest pt-6 md:bg-cream">
-        <CategoryChips chips={chips} active={category} onChange={setCategory} />
+        {/* Google-style quick actions */}
+        <div className="no-scrollbar flex gap-2 overflow-x-auto px-5 pb-3">
+          <button onClick={navigate} className="shrink-0 rounded-full bg-mint px-4 py-2 text-sm font-bold text-white shadow-sm">
+            ➤ Directions
+          </button>
+          <a
+            href={googleMapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 rounded-full bg-crisp px-4 py-2 text-sm font-semibold text-forest shadow-sm"
+          >
+            🗺️ Google Maps
+          </a>
+          {shop.phone && (
+            <a href={`tel:${shop.phone.replace(/[^+\d]/g, '')}`} className="shrink-0 rounded-full bg-crisp px-4 py-2 text-sm font-semibold text-forest shadow-sm">
+              📞 Call
+            </a>
+          )}
+          {shop.website && (
+            <a href={shop.website} target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-full bg-crisp px-4 py-2 text-sm font-semibold text-forest shadow-sm">
+              🌐 Website
+            </a>
+          )}
+          <button onClick={() => setReviewOpen(true)} className="shrink-0 rounded-full bg-crisp px-4 py-2 text-sm font-semibold text-forest shadow-sm">
+            ★ Rate
+          </button>
+        </div>
+
+        {photos.length > 0 && (
+          <div className="no-scrollbar flex gap-2 overflow-x-auto px-5 pb-3">
+            {photos.map((src, i) => (
+              <button key={src} onClick={() => setPhoto({ src, title: `${shop.name} — photo ${i + 1}` })} className="shrink-0">
+                <img
+                  src={src}
+                  alt={`${shop.name} photo ${i + 1}`}
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => (e.currentTarget.parentElement.style.display = 'none')}
+                  className="h-24 w-32 rounded-xl bg-crisp object-cover"
+                />
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div role="tablist" aria-label="Details" className="flex gap-6 border-b border-white/15 px-5 md:border-forest/10">
+          {[
+            ['menu', 'Menu'],
+            ['reviews', `Reviews${shop.reviewCount > 0 ? ` (${shop.reviewCount})` : ''}`],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              role="tab"
+              aria-selected={tab === key}
+              onClick={() => setTab(key)}
+              className={`-mb-px border-b-2 pb-2 text-sm font-bold ${
+                tab === key ? 'border-mint text-white md:text-forest' : 'border-transparent text-white/60 md:text-forest/50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'menu' && menu !== null && menu.length > 0 && (
+          <div className="pt-3">
+            <CategoryChips chips={chips} active={category} onChange={setCategory} />
+          </div>
+        )}
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-4">
-          {menu === null ? (
+          {tab === 'reviews' ? (
+            <div className="-mx-5 -mt-4">
+              <ReviewsPanel shop={shop} reviews={reviews} onWrite={() => setReviewOpen(true)} />
+            </div>
+          ) : menu === null ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-1" aria-busy="true">
               {[0, 1, 2].map((i) => (
                 <div key={i} className="h-28 animate-pulse rounded-2xl bg-crisp/60" />
               ))}
+            </div>
+          ) : menu.length === 0 ? (
+            <div className="space-y-4">
+              {shop.menuBoardUrl && !boardFailed && (
+                <button
+                  onClick={() => setPhoto({ src: shop.menuBoardUrl, title: `${shop.name} — menu` })}
+                  className="block w-full overflow-hidden rounded-2xl bg-crisp shadow-sm"
+                >
+                  <img src={shop.menuBoardUrl} alt={`${shop.name} menu`} referrerPolicy="no-referrer" onError={() => setBoardFailed(true)} className="max-h-64 w-full object-cover" />
+                </button>
+              )}
+              <div className="rounded-2xl bg-crisp p-5 text-center shadow-sm">
+                <p className="text-2xl" aria-hidden="true">📋</p>
+                <h3 className="mt-1 text-base font-extrabold text-forest">Menu not listed here yet</h3>
+                <p className="mt-1 text-sm text-forest/70">
+                  See this cafe's menu, photos and reviews on Google Maps.
+                </p>
+                <a
+                  href={googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-block rounded-xl bg-forest px-5 py-2.5 text-sm font-bold text-white"
+                >
+                  🗺️ Open in Google Maps
+                </a>
+              </div>
             </div>
           ) : (
             <>
@@ -122,11 +250,6 @@ export default function ShopDetails({ shop, route, routeLoading, busy, onVisited
                   />
                 ))}
               </div>
-              {shop.menuIsSample !== false && (
-                <p className="mt-4 text-center text-xs text-white/60 md:text-forest/50">
-                  Sample menu — real photos for this cafe haven't been added yet.
-                </p>
-              )}
             </>
           )}
         </div>
@@ -148,6 +271,19 @@ export default function ShopDetails({ shop, route, routeLoading, busy, onVisited
           {count > 0 ? `Place Order · ${formatPrice(total)} (${count})` : 'Navigate →'}
         </button>
       </div>
+
+      {reviewOpen && (
+        <ReviewModal
+          shop={shop}
+          onClose={() => setReviewOpen(false)}
+          onSaved={(res) => {
+            setReviewOpen(false);
+            setReviews(res.reviews);
+            setTab('reviews');
+            onRated(shop.id, { rating: res.rating, reviewCount: res.reviewCount });
+          }}
+        />
+      )}
 
       {photo && <PhotoLightbox photo={photo} onClose={() => setPhoto(null)} />}
 

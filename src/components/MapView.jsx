@@ -1,14 +1,32 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-const pinIcon = (cls) =>
-  L.divIcon({
-    className: '',
-    html: `<div class="caff-pin ${cls}"><span>☕</span></div>`,
-    iconSize: [36, 46],
-    iconAnchor: [18, 45],
-  });
+const LABEL_ZOOM = 15; // name labels + rating bubbles appear from this zoom, like Google Maps
+
+/** Builds the pin with DOM APIs (textContent), so cafe names from OpenStreetMap can never inject HTML. */
+function pinIcon(shop, cls, showLabel) {
+  const root = document.createElement('div');
+  root.className = `caff-pin ${cls}`;
+  const cup = document.createElement('span');
+  cup.textContent = '☕';
+  root.append(cup);
+
+  const hasRating = shop.rating != null;
+  if (hasRating) {
+    const bubble = document.createElement('i');
+    bubble.className = 'caff-bubble';
+    bubble.textContent = `${Number(shop.rating).toFixed(1)}★`;
+    root.append(bubble);
+  }
+  if (showLabel) {
+    const label = document.createElement('b');
+    label.className = 'caff-label';
+    label.textContent = shop.name;
+    root.append(label);
+  }
+  return L.divIcon({ className: '', html: root, iconSize: [36, 46], iconAnchor: [18, 45] });
+}
 
 const userIcon = L.divIcon({
   className: '',
@@ -29,7 +47,7 @@ const userIcon = L.divIcon({
  *  - route:      { path: [lat,lng][], approx } | null  -> drawn as the navigation polyline
  *  - padding:    { top, right, bottom, left } px kept clear (e.g. under the bottom sheet) when fitting the route
  */
-export default function MapView({ userPos, shops, selectedId, route, padding, onSelect }) {
+export default function MapView({ userPos, shops, selectedId, route, padding, onSelect, onAreaMoved }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
   const userMarkerRef = useRef(null);
@@ -37,12 +55,37 @@ export default function MapView({ userPos, shops, selectedId, route, padding, on
   const routeLayerRef = useRef(null);
   const onSelectRef = useRef(onSelect);
   const paddingRef = useRef(padding);
+  const onAreaMovedRef = useRef(onAreaMoved);
+  const quietUntilRef = useRef(Date.now() + 2000); // ignore moves the app makes itself (fitBounds, setView)
+  const searchedRef = useRef(null); // center of the last searched area
+  const labelsRef = useRef(false);
+  const [labels, setLabels] = useState(false);
   onSelectRef.current = onSelect;
+  onAreaMovedRef.current = onAreaMoved;
   paddingRef.current = padding;
 
   // --- create / destroy the map ---
   useEffect(() => {
-    const map = L.map(elRef.current, { zoomControl: false }).setView([userPos.lat, userPos.lng], 14);
+    const map = L.map(elRef.current, { zoomControl: false }).setView([userPos.lat, userPos.lng], 15);
+    searchedRef.current = L.latLng(userPos.lat, userPos.lng);
+    labelsRef.current = map.getZoom() >= LABEL_ZOOM;
+    setLabels(labelsRef.current);
+    map.on('zoomend', () => {
+      const on = map.getZoom() >= LABEL_ZOOM;
+      if (on !== labelsRef.current) {
+        labelsRef.current = on;
+        setLabels(on);
+      }
+    });
+    map.on('moveend', () => {
+      if (Date.now() < quietUntilRef.current) return;
+      const c = map.getCenter();
+      if (c.distanceTo(searchedRef.current) < 400) return;
+      const b = map.getBounds();
+      const radiusM = Math.min(10000, Math.max(500, Math.round(c.distanceTo(b.getNorthEast()))));
+      searchedRef.current = c;
+      onAreaMovedRef.current?.({ lat: c.lat, lng: c.lng, radiusM });
+    });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -70,7 +113,9 @@ export default function MapView({ userPos, shops, selectedId, route, padding, on
     if (!map) return;
     if (!userMarkerRef.current) {
       userMarkerRef.current = L.marker([userPos.lat, userPos.lng], { icon: userIcon, zIndexOffset: 1000, interactive: false }).addTo(map);
+      quietUntilRef.current = Date.now() + 1500;
       map.setView([userPos.lat, userPos.lng], map.getZoom());
+      searchedRef.current = L.latLng(userPos.lat, userPos.lng);
     } else {
       userMarkerRef.current.setLatLng([userPos.lat, userPos.lng]);
     }
@@ -91,18 +136,19 @@ export default function MapView({ userPos, shops, selectedId, route, padding, on
     }
     for (const shop of shops) {
       const cls = shop.id === selectedId ? 'is-selected' : shop.visited ? 'is-visited' : '';
+      const sig = `${cls}|${labels}|${shop.rating}|${shop.reviewCount}`;
       const existing = markers.get(shop.id);
       if (!existing) {
-        const marker = L.marker([shop.lat, shop.lng], { icon: pinIcon(cls), zIndexOffset: cls === 'is-selected' ? 500 : 0 }).addTo(map);
+        const marker = L.marker([shop.lat, shop.lng], { icon: pinIcon(shop, cls, labels), zIndexOffset: cls === 'is-selected' ? 500 : 0 }).addTo(map);
         marker.on('click', () => onSelectRef.current(shop.id));
-        markers.set(shop.id, { marker, cls });
-      } else if (existing.cls !== cls) {
-        existing.marker.setIcon(pinIcon(cls));
+        markers.set(shop.id, { marker, sig });
+      } else if (existing.sig !== sig) {
+        existing.marker.setIcon(pinIcon(shop, cls, labels));
         existing.marker.setZIndexOffset(cls === 'is-selected' ? 500 : 0);
-        existing.cls = cls;
+        existing.sig = sig;
       }
     }
-  }, [shops, selectedId]);
+  }, [shops, selectedId, labels]);
 
   // --- the waypoint route polyline ---
   useEffect(() => {
@@ -125,6 +171,7 @@ export default function MapView({ userPos, shops, selectedId, route, padding, on
     });
     routeLayerRef.current = L.layerGroup([casing, line]).addTo(map);
 
+    quietUntilRef.current = Date.now() + 1500;
     const p = paddingRef.current;
     map.fitBounds(L.latLngBounds(route.path), {
       paddingTopLeft: [p.left, p.top],

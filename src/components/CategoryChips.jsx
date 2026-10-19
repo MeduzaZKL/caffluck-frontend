@@ -17,7 +17,7 @@ export default function CategoryChips({ chips, active, onChange }) {
               isActive ? 'ring-mint' : 'ring-transparent hover:ring-mint/40'
             }`}
           >
-            {chip.emoji} {chip.label} ({chip.count} Menus)
+            {chip.emoji} {chip.label} ({chip.count} {chip.count === 1 ? "Menu" : "Menus"})
           </button>
         );
       })}
