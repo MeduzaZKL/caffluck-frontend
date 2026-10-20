@@ -5,9 +5,11 @@ import TripMeta from './components/TripMeta';
 import ReviewModal from './components/ReviewModal';
 import StatusNotice from './components/StatusNotice';
 import SkeletonPins from './components/SkeletonPins';
+import FilterBar from './components/FilterBar';
 import { api } from './lib/api';
 import { fetchRoute } from './lib/routing';
 import { SEARCH_RADIUS_M } from './lib/config';
+import { loadFilters, saveFilters, matchesFilters, serverFilters, activeFilterCount } from './lib/filters';
 import { useGeolocation } from './hooks/useGeolocation';
 import { useMediaQuery } from './hooks/useMediaQuery';
 
@@ -32,6 +34,13 @@ export default function App() {
   const [notice, setNotice] = useState(null); // { kind: 'empty'|'busy'|'error', retry: 'load'|'roll'|'area' }
   const [reloadKey, setReloadKey] = useState(0); // bump to re-run the initial café load (Retry)
   const [slow, setSlow] = useState(false); // a request is taking long (free server waking up)
+
+  const [filters, setFiltersState] = useState(loadFilters); // remembered between visits
+  const setFilters = useCallback((next) => {
+    setFiltersState(next);
+    saveFilters(next);
+    setNotice((n) => (n?.kind === 'nomatch' ? null : n));
+  }, []);
 
   const detailCtrl = useRef(null);
   const showToast = useCallback((message) => setToast({ id: Date.now(), message }), []);
@@ -103,6 +112,14 @@ export default function App() {
     return () => ctrl.abort();
   }, [selectedId, selectedLat, selectedLng, lat, lng]);
 
+  // Pins that pass the filter bar (the open cafe always keeps its pin).
+  const userPos = geo.pos;
+  const visibleShops = useMemo(
+    () => shops.filter((s) => s.id === selected?.id || matchesFilters(s, filters, userPos)),
+    [shops, filters, userPos, selected?.id],
+  );
+  const filtersOn = activeFilterCount(filters) > 0;
+
   // --- selection helpers ---
   const deselect = useCallback(() => {
     detailCtrl.current?.abort();
@@ -135,7 +152,7 @@ export default function App() {
     setRolling(true);
     setNotice(null);
     try {
-      const [res] = await Promise.all([api.roll(geo.pos.lat, geo.pos.lng, SEARCH_RADIUS_M), sleep(600)]);
+      const [res] = await Promise.all([api.roll(geo.pos.lat, geo.pos.lng, SEARCH_RADIUS_M, serverFilters(filters)), sleep(600)]);
       if (res.status === 'ok') {
         detailCtrl.current?.abort();
         setShops((prev) => (prev.some((s) => s.id === res.shop.id) ? prev : [...prev, res.shop]));
@@ -143,6 +160,8 @@ export default function App() {
         setSheet('peek');
       } else if (res.status === 'all_visited') {
         showToast("You've been to every cafe around here! 🎉 Come back when new ones open.");
+      } else if (res.status === 'no_match') {
+        setNotice({ kind: 'nomatch', retry: 'clear' });
       } else if (res.status === 'unavailable') {
         setNotice({ kind: 'busy', retry: 'roll' });
       } else {
@@ -174,7 +193,8 @@ export default function App() {
 
   const retry = () => {
     const what = notice?.retry;
-    if (what === 'roll') roll();
+    if (what === 'clear') setFilters({ maxWalkMin: null, openNow: false, hideVisited: false, features: [] });
+    else if (what === 'roll') roll();
     else if (what === 'area') searchArea();
     else {
       setNotice(null);
@@ -252,7 +272,7 @@ export default function App() {
       <main className="relative z-0 min-w-0 flex-1">
         <MapView
           userPos={geo.pos}
-          shops={shops}
+          shops={visibleShops}
           selectedId={selectedId}
           route={route}
           padding={padding}
@@ -262,14 +282,19 @@ export default function App() {
         {shopsLoading && shops.length === 0 && <SkeletonPins />}
 
         {/* Top overlay: brand, mobile trip card, status */}
-        <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-col items-start gap-2 md:right-auto md:max-w-sm">
-          <span
-            className={`pointer-events-auto items-center gap-2 rounded-full bg-forest px-4 py-2 text-sm font-extrabold tracking-wide text-white shadow-lg ${
-              selected ? 'hidden md:inline-flex' : 'inline-flex'
-            }`}
-          >
-            ☕ Caffluck
-          </span>
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-col items-start gap-2 md:right-16">
+          <div className="flex w-full min-w-0 flex-col items-start gap-2 md:flex-row md:items-start">
+            <span
+              className={`pointer-events-auto shrink-0 items-center gap-2 rounded-full bg-forest px-4 py-2 text-sm font-extrabold tracking-wide text-white shadow-lg ${
+                selected ? 'hidden md:inline-flex' : 'inline-flex'
+              }`}
+            >
+              ☕ Caffluck
+            </span>
+            <div className={`w-full min-w-0 md:flex-1 ${selected ? 'max-md:hidden' : ''}`}>
+              <FilterBar filters={filters} onChange={setFilters} matching={visibleShops.length} total={shops.length} />
+            </div>
+          </div>
 
           {selected && (
             <div className="pointer-events-auto w-full md:hidden">
@@ -307,7 +332,7 @@ export default function App() {
           <button
             onClick={searchArea}
             disabled={areaBusy}
-            className="absolute left-1/2 top-16 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-crisp px-4 py-2 text-sm font-bold text-forest shadow-lg ring-1 ring-forest/10 transition hover:bg-cream active:scale-95 md:top-4"
+            className="absolute left-1/2 top-[7.5rem] z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-crisp px-4 py-2 text-sm font-bold text-forest shadow-lg ring-1 ring-forest/10 transition hover:bg-cream active:scale-95 md:bottom-24 md:top-auto"
           >
             {areaBusy ? 'Searching…' : '↻ Search this area'}
           </button>

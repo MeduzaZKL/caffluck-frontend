@@ -5,6 +5,7 @@
 const COPY = {
   empty: { icon: '🔍', title: 'No cafés found nearby', body: 'We couldn’t find any cafés in this area on OpenStreetMap. Try moving the map and using “Search this area”.' },
   busy: { icon: '⏳', title: 'Café data is busy', body: 'The free map-data service is slow right now. Give it a moment and try again.' },
+  nomatch: { icon: '🎛️', title: 'No café matches your filters', body: 'There are cafés nearby, but none fit every filter you picked. Loosen a filter and roll again.', action: '✕ Clear filters' },
   error: { icon: '📡', title: 'API unavailable — try again', body: 'We couldn’t reach the Caffluck server. Check your connection, then retry. The first request after a while can take up to a minute.' },
 };
 
@@ -27,7 +28,7 @@ export default function StatusNotice({ kind, onRetry, onDismiss, retrying = fals
         disabled={retrying}
         className="mt-3 w-full rounded-xl bg-forest py-2.5 text-sm font-bold text-white transition hover:bg-forest/90 disabled:opacity-60"
       >
-        {retrying ? 'Retrying…' : '↻ Retry'}
+        {retrying ? 'Working…' : (c.action ?? '↻ Retry')}
       </button>
     </div>
   );

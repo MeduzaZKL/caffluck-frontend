@@ -11,7 +11,7 @@ export default function WhyThisPick({ match, onOpen }) {
   if (!match) return null;
 
   const n = match.poolSize;
-  const basis = `Random pick from ${n} café${n === 1 ? '' : 's'} you haven’t visited${match.openNow === true ? ' — open ones first' : ''}.`;
+  const basis = `Random pick from ${n} café${n === 1 ? '' : 's'} you haven’t visited${match.filtered ? ' that match your filters' : ''}${match.openNow === true ? ' — open ones first' : ''}.`;
 
   return (
     <section className="mx-5 mb-3 rounded-2xl bg-crisp p-3.5 text-forest shadow-sm" aria-label="Why this café">
