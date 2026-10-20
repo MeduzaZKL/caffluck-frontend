@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import RatingBadge from './RatingBadge';
-import TripMeta from './TripMeta';
 import CategoryChips from './CategoryChips';
 import MenuCard from './MenuCard';
 import OrderModal from './OrderModal';
@@ -87,8 +86,14 @@ export default function ShopDetails({ shop, route, routeLoading, userPos, onExpa
         >
           ✕
         </button>
+        <button
+          onClick={onClose}
+          className="mb-3 hidden min-h-[36px] items-center gap-1.5 rounded-full bg-white/10 px-3.5 text-xs font-bold text-white transition hover:bg-white/20 active:scale-95 md:inline-flex"
+        >
+          ← All cafés <kbd className="rounded bg-black/20 px-1.5 text-[10px]">Esc</kbd>
+        </button>
         <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-mint">
-          Your pick
+          {shop.match ? 'Your pick' : 'Selected café'}
         </p>
         <h2 className="pr-24 text-2xl font-extrabold leading-tight">{shop.name}</h2>
         <p className="mt-1 pr-24 text-sm text-white/85">{shop.address}</p>
@@ -97,9 +102,6 @@ export default function ShopDetails({ shop, route, routeLoading, userPos, onExpa
             ? `${shop.reviewCount} review${shop.reviewCount === 1 ? '' : 's'}`
             : 'No reviews yet'}
         </p>
-        <div className="mt-3 hidden md:block">
-          <TripMeta route={route} loading={routeLoading} variant="inline" />
-        </div>
         {shop.rating != null && <RatingBadge rating={shop.rating} className="absolute -bottom-4 right-5" />}
       </header>
 

@@ -47,7 +47,7 @@ const userIcon = L.divIcon({
  *  - route:      { path: [lat,lng][], approx } | null  -> drawn as the navigation polyline
  *  - padding:    { top, right, bottom, left } px kept clear (e.g. under the bottom sheet) when fitting the route
  */
-export default function MapView({ userPos, shops, selectedId, route, routeLoading, padding, recenterSignal, onSelect, onAreaMoved }) {
+export default function MapView({ userPos, shops, selectedId, route, routeLoading, padding, recenterSignal, hoverId, onSelect, onAreaMoved }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
   const userMarkerRef = useRef(null);
@@ -137,20 +137,20 @@ export default function MapView({ userPos, shops, selectedId, route, routeLoadin
       }
     }
     for (const shop of shops) {
-      const cls = shop.id === selectedId ? 'is-selected' : shop.visited ? 'is-visited' : '';
+      const cls = shop.id === selectedId ? 'is-selected' : shop.id === hoverId ? 'is-hover' : shop.visited ? 'is-visited' : '';
       const sig = `${cls}|${labels}|${shop.rating}|${shop.reviewCount}`;
       const existing = markers.get(shop.id);
       if (!existing) {
-        const marker = L.marker([shop.lat, shop.lng], { icon: pinIcon(shop, cls, labels), zIndexOffset: cls === 'is-selected' ? 500 : 0 }).addTo(map);
+        const marker = L.marker([shop.lat, shop.lng], { icon: pinIcon(shop, cls, labels), zIndexOffset: cls === 'is-selected' ? 500 : cls === 'is-hover' ? 400 : 0 }).addTo(map);
         marker.on('click', () => onSelectRef.current(shop.id));
         markers.set(shop.id, { marker, sig });
       } else if (existing.sig !== sig) {
         existing.marker.setIcon(pinIcon(shop, cls, labels));
-        existing.marker.setZIndexOffset(cls === 'is-selected' ? 500 : 0);
+        existing.marker.setZIndexOffset(cls === 'is-selected' ? 500 : cls === 'is-hover' ? 400 : 0);
         existing.sig = sig;
       }
     }
-  }, [shops, selectedId, labels]);
+  }, [shops, selectedId, labels, hoverId]);
 
   // --- the waypoint route polyline ---
   useEffect(() => {

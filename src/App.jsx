@@ -6,6 +6,7 @@ import ReviewModal from './components/ReviewModal';
 import StatusNotice from './components/StatusNotice';
 import SkeletonPins from './components/SkeletonPins';
 import FilterBar from './components/FilterBar';
+import PanelToggle from './components/PanelToggle';
 import { api } from './lib/api';
 import { fetchRoute } from './lib/routing';
 import { SEARCH_RADIUS_M } from './lib/config';
@@ -44,6 +45,28 @@ export default function App() {
   }, []);
 
   const [rollDone, setRollDone] = useState(false); // brief "Found one!" success state on the roll button
+  // Desktop side panel: slides away so only the map remains. Remembered between visits.
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try {
+      return localStorage.getItem('caffluck.sidebar.v1') !== 'closed';
+    } catch {
+      return true;
+    }
+  });
+  const [sidebarTip, setSidebarTip] = useState(false);
+  const toggleSidebar = useCallback(() => {
+    setSidebarTip(false);
+    setSidebarOpen((open) => {
+      try {
+        localStorage.setItem('caffluck.sidebar.v1', open ? 'closed' : 'open');
+        localStorage.setItem('caffluck.sidebar.tip.v1', '1');
+      } catch {
+        /* ignore */
+      }
+      return !open;
+    });
+  }, []);
+  const [hoverId, setHoverId] = useState(null); // desktop: card hovered in the sidebar list -> pin lights up
   const [recenter, setRecenter] = useState(0); // bump to fly the map back to the user
   const [hint, setHint] = useState(false); // first-visit gesture hint (phones)
 
@@ -160,6 +183,7 @@ export default function App() {
       if (!basic) return;
       setSelected(basic);
       setSheet((s) => (s === 'closed' ? 'mini' : s));
+      setSidebarOpen(true);
       dismissHint();
       detailCtrl.current?.abort();
       const ctrl = new AbortController();
@@ -188,6 +212,7 @@ export default function App() {
         setShops((prev) => (prev.some((s) => s.id === res.shop.id) ? prev : [...prev, res.shop]));
         setSelected(res.shop);
         setSheet('peek');
+        setSidebarOpen(true); // the result lives in the panel
         haptic([20, 40, 30]);
         setRollDone(true);
         setTimeout(() => setRollDone(false), 1400);
@@ -206,6 +231,52 @@ export default function App() {
       setRolling(false);
     }
   };
+
+  useEffect(() => {
+    if (!isDesktop || !sidebarOpen || shopsLoading) return undefined;
+    let seen = true;
+    try {
+      seen = localStorage.getItem('caffluck.sidebar.tip.v1') === '1';
+    } catch {
+      /* no storage: skip the tip */
+    }
+    if (seen) return undefined;
+    const show = setTimeout(() => setSidebarTip(true), 1200);
+    const hide = setTimeout(() => {
+      setSidebarTip(false);
+      try {
+        localStorage.setItem('caffluck.sidebar.tip.v1', '1');
+      } catch {
+        /* ignore */
+      }
+    }, 9000);
+    return () => {
+      clearTimeout(show);
+      clearTimeout(hide);
+    };
+  }, [isDesktop, sidebarOpen, shopsLoading]);
+
+  // Desktop keyboard shortcuts: R = Randomize Me!, [ = hide/show the panel, Esc = back to the list. Ignored while typing or in a dialog.
+  const rollRef = useRef(roll);
+  rollRef.current = roll;
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        rollRef.current();
+      } else if (e.key === '[') {
+        toggleSidebar();
+      } else if (e.key === 'Escape') {
+        deselect();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [deselect, toggleSidebar]);
 
   // --- "I Already Go There" ---
   const markVisited = async () => {
@@ -270,9 +341,9 @@ export default function App() {
   const padding = useMemo(
     () =>
       isDesktop
-        ? { top: 70, right: 60, bottom: 110, left: 60 }
+        ? { top: 90, right: 70, bottom: 110, left: (sidebarOpen ? (window.innerWidth >= 1024 ? 450 : 430) + 24 : 0) + 60 }
         : { top: 130, right: 28, bottom: (sheet === 'mini' ? 272 : Math.round(window.innerHeight * (sheet === 'expanded' ? 0.88 : 0.62))) + 24, left: 28 },
-    [isDesktop, sheet],
+    [isDesktop, sheet, sidebarOpen],
   );
 
   if (!geo.pos) {
@@ -287,7 +358,10 @@ export default function App() {
   const rollBottom = sheet === 'closed' ? 'bottom-6' : sheet === 'mini' ? 'bottom-[calc(272px+1rem)]' : 'bottom-[calc(62dvh+1rem)]';
 
   return (
-    <div className="app-root flex h-screen w-screen flex-col overflow-hidden bg-cream font-sans md:flex-row">
+    <div
+      className="app-root relative flex h-screen w-screen flex-col overflow-hidden bg-cream font-sans md:flex-row md:[--pw:430px] lg:[--pw:450px]"
+      style={{ '--sb': sidebarOpen ? 'calc(var(--pw) + 1.5rem)' : '0px' }}
+    >
       <DetailsPanel
         sheet={sheet}
         onSheetChange={setSheet}
@@ -299,10 +373,25 @@ export default function App() {
         onVisited={markVisited}
         onClose={deselect}
         onRated={applyRating}
+        collapsed={isDesktop && !sidebarOpen}
+        list={{
+          shops: visibleShops,
+          loading: shopsLoading,
+          filtersOn,
+          totalCount: shops.length,
+          visitedCount: shops.filter((x) => x.visited).length,
+          rolling,
+          onRoll: roll,
+          onPick: selectShop,
+          onHover: setHoverId,
+          onClearFilters: () => setFilters({ maxWalkMin: null, openNow: false, hideVisited: false, features: [] }),
+        }}
       />
 
       {/* Map area: full screen on mobile, the remaining width next to the sidebar on desktop */}
-      <main className="relative z-0 min-w-0 flex-1">
+      <PanelToggle open={sidebarOpen} onToggle={toggleSidebar} showTip={sidebarTip} />
+
+      <main className="relative z-0 min-w-0 flex-1 md:absolute md:inset-0">
         <MapView
           userPos={geo.pos}
           shops={visibleShops}
@@ -310,6 +399,7 @@ export default function App() {
           route={route}
           routeLoading={routeLoading}
           recenterSignal={recenter}
+          hoverId={hoverId}
           padding={padding}
           onSelect={selectShop}
           onAreaMoved={setAreaView}
@@ -317,12 +407,12 @@ export default function App() {
         {shopsLoading && shops.length === 0 && <SkeletonPins />}
 
         {/* Top overlay: brand, mobile trip card, status */}
-        <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-col items-start gap-2 md:right-16">
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-col items-start gap-2 md:left-[calc(var(--sb)+0.75rem)] md:right-16 md:transition-[left] md:duration-[560ms] md:ease-[cubic-bezier(0.22,1,0.36,1)]">
           <div className="flex w-full min-w-0 flex-col items-start gap-2 md:flex-row md:items-start">
             <span
               className={`pointer-events-auto shrink-0 items-center gap-2 rounded-full bg-forest px-4 py-2 text-sm font-extrabold tracking-wide text-white shadow-lg ${
-                selected ? 'hidden md:inline-flex' : 'inline-flex'
-              }`}
+                selected ? 'hidden' : 'inline-flex'
+              } md:hidden`}
             >
               ☕ Caffluck
             </span>
@@ -364,13 +454,22 @@ export default function App() {
 
         {/* Google-style "Search this area" pill */}
         {areaView && !notice && (
-          <button
-            onClick={searchArea}
-            disabled={areaBusy}
-            className="absolute left-1/2 top-[7.5rem] z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-crisp px-4 py-2 text-sm font-bold text-forest shadow-lg ring-1 ring-forest/10 transition hover:bg-cream active:scale-95 md:bottom-24 md:top-auto"
-          >
-            {areaBusy ? 'Searching…' : '↻ Search this area'}
-          </button>
+          <div className="pointer-events-none absolute inset-x-0 top-[7.5rem] z-10 flex justify-center md:bottom-24 md:left-[var(--sb)] md:top-auto md:transition-[left] md:duration-[560ms] md:ease-[cubic-bezier(0.22,1,0.36,1)]">
+            <button
+              onClick={searchArea}
+              disabled={areaBusy}
+              className="pointer-events-auto whitespace-nowrap rounded-full bg-crisp px-4 py-2 text-sm font-bold text-forest shadow-lg ring-1 ring-forest/10 transition hover:bg-cream active:scale-95"
+            >
+              {areaBusy ? 'Searching…' : '↻ Search this area'}
+            </button>
+          </div>
+        )}
+
+        {/* Desktop: floating route summary on the map */}
+        {selected && (route || routeLoading) && (
+          <div className="pointer-events-auto absolute bottom-8 left-4 z-10 hidden md:left-[calc(var(--sb)+1rem)] md:block md:transition-[left] md:duration-[560ms] md:ease-[cubic-bezier(0.22,1,0.36,1)]">
+            <TripMeta route={route} loading={routeLoading} variant="card" />
+          </div>
         )}
 
         {/* First-visit gesture hint (phones) */}
@@ -399,17 +498,17 @@ export default function App() {
         </button>
 
         {/* Randomize button: breathes when idle, shimmers while rolling, flashes green when it found one */}
+        <div className={`pointer-events-none absolute inset-x-0 z-10 flex justify-center transition-[bottom] duration-300 md:bottom-8 md:left-[var(--sb)] md:transition-[left] md:duration-[560ms] md:ease-[cubic-bezier(0.22,1,0.36,1)] ${rollBottom} ${sheet === 'expanded' ? 'max-md:hidden' : ''}`}>
         <button
           onClick={roll}
           disabled={rolling}
           aria-live="polite"
-          className={`absolute left-1/2 z-10 min-h-[56px] -translate-x-1/2 whitespace-nowrap rounded-full bg-forest px-8 py-3.5 text-lg font-extrabold text-white shadow-xl shadow-forest/30 transition-[bottom,transform,background-color] duration-300 hover:bg-forest/90 active:scale-95 disabled:opacity-100 md:bottom-8 md:text-base ${rollBottom} ${
-            sheet === 'expanded' ? 'max-md:hidden' : ''
-          } ${rolling ? 'caff-cta-rolling' : rollDone ? 'caff-cta-success' : sheet === 'closed' ? 'caff-cta-idle' : ''}`}
+          className={`pointer-events-auto min-h-[56px] whitespace-nowrap rounded-full bg-forest px-8 py-3.5 text-lg font-extrabold text-white shadow-xl shadow-forest/30 transition-[transform,background-color] duration-300 hover:bg-forest/90 active:scale-95 disabled:opacity-100 md:text-base ${rolling ? 'caff-cta-rolling' : rollDone ? 'caff-cta-success' : sheet === 'closed' ? 'caff-cta-idle' : ''}`}
         >
           <span className={`mr-2 inline-block ${rolling ? 'animate-spin' : ''}`}>{rollDone ? '🎯' : '🎲'}</span>
           {rolling ? (slow ? 'Waking the server…' : 'Rolling…') : rollDone ? 'Found your café!' : 'Randomize Me!'}
         </button>
+        </div>
       </main>
 
       {reviewPrompt && (

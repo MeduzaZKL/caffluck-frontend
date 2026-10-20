@@ -26,7 +26,7 @@ export default function PickSignals({ shop, route, userPos, onRate }) {
   const hours = shop.hours;
 
   return (
-    <div className="no-scrollbar flex gap-2 overflow-x-auto px-5 pb-3" aria-label="Quick facts">
+    <div className="no-scrollbar flex gap-2 overflow-x-auto px-5 pb-3 md:flex-wrap md:overflow-visible" aria-label="Quick facts">
       {walk && (
         <span className={neutral}>
           <span aria-hidden="true">🚶</span>

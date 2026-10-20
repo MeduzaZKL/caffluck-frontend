@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import ShopDetails from './ShopDetails';
 import MiniSummary from './MiniSummary';
+import NearbyList from './NearbyList';
 
 /**
  * ONE <aside> that is two layouts, switched purely by Tailwind breakpoints:
@@ -11,7 +12,7 @@ import MiniSummary from './MiniSummary';
  * `md:` utilities override the mobile ones (position, height, transform, radius, background),
  * so no JS and no duplicated markup is needed to switch between the two.
  */
-export default function DetailsPanel({ sheet, onSheetChange, shop, route, routeLoading, userPos, busy, onVisited, onClose, onRated }) {
+export default function DetailsPanel({ sheet, onSheetChange, shop, route, routeLoading, userPos, busy, onVisited, onClose, onRated, list, collapsed = false }) {
   const touchY = useRef(null);
   const open = sheet !== 'closed';
   const mini = sheet === 'mini';
@@ -33,9 +34,13 @@ export default function DetailsPanel({ sheet, onSheetChange, shop, route, routeL
   return (
     <aside
       aria-label="Coffee shop details"
+      aria-hidden={collapsed || undefined}
+      inert={collapsed || undefined}
       className={`fixed inset-x-0 bottom-0 z-30 flex flex-col overflow-hidden rounded-t-3xl bg-forest shadow-2xl transition-[height,transform] duration-300 ease-out ${height} ${
         open ? 'translate-y-0' : 'translate-y-full'
-      } md:static md:z-10 md:h-full md:w-[420px] md:shrink-0 md:translate-y-0 md:rounded-none md:bg-cream md:shadow-xl lg:w-[450px]`}
+      } md:absolute md:inset-x-auto md:bottom-3 md:left-3 md:top-3 md:z-20 md:h-auto md:w-[var(--pw)] md:translate-y-0 md:rounded-3xl md:bg-cream md:shadow-[0_28px_70px_-14px_rgba(0,50,34,0.5)] md:ring-1 md:ring-white/70 md:transition-[transform,opacity] md:duration-[560ms] md:ease-[cubic-bezier(0.22,1,0.36,1)] md:will-change-transform ${
+        collapsed ? 'md:pointer-events-none md:-translate-x-[calc(100%+1.5rem)] md:opacity-0' : 'md:translate-x-0 md:opacity-100'
+      }`}
     >
       {/* Drag handle — bottom sheet only */}
       <button
@@ -78,14 +83,9 @@ export default function DetailsPanel({ sheet, onSheetChange, shop, route, routeL
           </div>
         </div>
       ) : (
-        // Desktop empty state (the mobile sheet is closed when nothing is selected)
-        <div className="hidden flex-1 flex-col items-center justify-center gap-3 px-10 text-center md:flex">
-          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-forest text-4xl shadow-lg">☕</div>
-          <h2 className="text-2xl font-extrabold text-forest">Caffluck</h2>
-          <p className="text-sm text-forest/70">
-            Can't decide where to get coffee? Hit <strong>Randomize Me!</strong> or pick a pin on the map to see the
-            menu and the route.
-          </p>
+        // Desktop home: nearby cafés (the mobile sheet stays closed when nothing is selected)
+        <div className="hidden min-h-0 flex-1 md:block">
+          <NearbyList userPos={userPos} {...list} />
         </div>
       )}
     </aside>
