@@ -349,7 +349,7 @@ export default function App() {
   if (!geo.pos) {
     return (
       <div className="app-root flex h-screen w-screen flex-col items-center justify-center gap-4 bg-cream text-forest">
-        <div className="flex h-16 w-16 animate-bounce items-center justify-center rounded-2xl bg-forest text-3xl shadow-lg">☕</div>
+        <img src="/logo-icon.svg" alt="" className="h-20 w-20 animate-bounce drop-shadow-xl" draggable="false" />
         <p className="text-sm font-semibold">Finding your location…</p>
       </div>
     );
@@ -414,7 +414,8 @@ export default function App() {
                 selected ? 'hidden' : 'inline-flex'
               } md:hidden`}
             >
-              ☕ Caffluck
+              <img src="/logo-mark-on-dark.svg" alt="" className="mr-2 h-6 w-auto" draggable="false" />
+              Caffluck
             </span>
             <div className={`w-full min-w-0 md:flex-1 ${selected ? 'max-md:hidden' : ''}`}>
               <FilterBar filters={filters} onChange={setFilters} matching={visibleShops.length} total={shops.length} />

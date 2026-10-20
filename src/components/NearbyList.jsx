@@ -65,12 +65,10 @@ export default function NearbyList({ shops, userPos, loading, filtersOn, totalCo
     <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 bg-forest px-6 pb-6 pt-7 text-white">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-mint text-2xl shadow-lg shadow-black/20" aria-hidden="true">☕</div>
-          <div>
-            <h1 className="text-2xl font-extrabold leading-none tracking-tight">Caffluck</h1>
-            <p className="mt-1 text-sm text-white/85">Can’t decide where to sip? Let fate pick.</p>
-          </div>
+          <img src="/logo-mark-on-dark.svg" alt="" className="h-14 w-auto drop-shadow-lg" draggable="false" />
+          <img src="/logo-wordmark-on-dark.svg" alt="Caffluck" className="h-9 w-auto" draggable="false" />
         </div>
+        <p className="mt-2 text-sm text-white/85">Can’t decide where to sip? Let fate pick.</p>
 
         <div className="mt-5 grid grid-cols-2 gap-3">
           <div className="rounded-2xl bg-white/10 px-4 py-3">
