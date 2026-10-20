@@ -31,7 +31,7 @@ async function request(path, { method = 'GET', body, signal } = {}) {
 export const api = {
   shops: (lat, lng, radius, signal) => request(`/shops?lat=${lat}&lng=${lng}&radius=${radius}`, { signal }),
   shop: (id, signal) => request(`/shops/${id}`, { signal }),
-  roll: (lat, lng, radius, filters) => request('/roll', { method: 'POST', body: { lat, lng, radius, filters } }),
+  roll: (lat, lng, radius, filters, avoid = []) => request('/roll', { method: 'POST', body: { lat, lng, radius, filters, avoid } }),
   reviews: (shopId, signal) => request(`/shops/${shopId}/reviews`, { signal }),
   postReview: (shopId, body) => request(`/shops/${shopId}/reviews`, { method: 'POST', body }),
   visited: () => request('/visited'),

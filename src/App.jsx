@@ -199,6 +199,7 @@ export default function App() {
   );
 
   // --- "Randomize Me!" ---
+  const recentRolls = useRef([]); // last few rolled café ids, so "Randomize Me!" doesn't repeat itself
   const roll = async () => {
     if (!geo.pos || rolling) return;
     haptic(12);
@@ -206,8 +207,9 @@ export default function App() {
     setRolling(true);
     setNotice(null);
     try {
-      const [res] = await Promise.all([api.roll(geo.pos.lat, geo.pos.lng, SEARCH_RADIUS_M, serverFilters(filters)), sleep(600)]);
+      const [res] = await Promise.all([api.roll(geo.pos.lat, geo.pos.lng, SEARCH_RADIUS_M, serverFilters(filters), recentRolls.current), sleep(600)]);
       if (res.status === 'ok') {
+        recentRolls.current = [res.shop.id, ...recentRolls.current.filter((id) => id !== res.shop.id)].slice(0, 6);
         detailCtrl.current?.abort();
         setShops((prev) => (prev.some((s) => s.id === res.shop.id) ? prev : [...prev, res.shop]));
         setSelected(res.shop);
@@ -342,7 +344,7 @@ export default function App() {
     () =>
       isDesktop
         ? { top: 90, right: 70, bottom: 110, left: (sidebarOpen ? (window.innerWidth >= 1024 ? 450 : 430) + 24 : 0) + 60 }
-        : { top: 130, right: 28, bottom: (sheet === 'mini' ? 272 : Math.round(window.innerHeight * (sheet === 'expanded' ? 0.88 : 0.62))) + 24, left: 28 },
+        : { top: 130, right: 28, bottom: (sheet === 'mini' ? 326 : Math.round(window.innerHeight * (sheet === 'expanded' ? 0.88 : 0.62))) + 24, left: 28 },
     [isDesktop, sheet, sidebarOpen],
   );
 
@@ -355,7 +357,7 @@ export default function App() {
     );
   }
 
-  const rollBottom = sheet === 'closed' ? 'bottom-6' : sheet === 'mini' ? 'bottom-[calc(272px+1rem)]' : 'bottom-[calc(62dvh+1rem)]';
+  const rollBottom = sheet === 'closed' ? 'bottom-6' : sheet === 'mini' ? 'bottom-[calc(326px+1rem)]' : 'bottom-[calc(62dvh+1rem)]';
 
   return (
     <div

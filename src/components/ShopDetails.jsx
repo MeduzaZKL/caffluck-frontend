@@ -8,6 +8,7 @@ import ReviewsPanel from './ReviewsPanel';
 import ReviewModal from './ReviewModal';
 import PickSignals from './PickSignals';
 import WhyThisPick from './WhyThisPick';
+import OpenWarning from './OpenWarning';
 import { api } from '../lib/api';
 import { formatPrice } from '../lib/format';
 import { googleDirectionsUrl, googleListingUrl, haptic } from '../lib/links';
@@ -111,6 +112,7 @@ export default function ShopDetails({ shop, route, routeLoading, userPos, onExpa
         <div className="shrink-0 pt-1">
           <PickSignals shop={shop} route={route} userPos={userPos} onRate={() => setReviewOpen(true)} />
           <WhyThisPick match={shop.match} onOpen={onExpand} />
+          <OpenWarning shop={shop} />
         </div>
 
         {/* Google-style quick actions */}

@@ -1,6 +1,6 @@
 import { walkInfo } from './PickSignals';
 import { formatDistance } from '../lib/format';
-import { googleDirectionsUrl, haptic } from '../lib/links';
+import { googleDirectionsUrl, googleListingUrl, haptic } from '../lib/links';
 
 /**
  * Mobile-only compact "selected café" card. It appears the moment a pin is tapped — before the route
@@ -55,6 +55,22 @@ export default function MiniSummary({ shop, route, routeLoading, userPos, onDeta
         )}
         {routeState}
       </div>
+
+      <a
+        href={googleListingUrl(shop)}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => haptic(10)}
+        className={`mt-2 flex min-h-[44px] items-center gap-2 rounded-xl px-3 text-xs font-bold ring-1 active:scale-[0.98] ${
+          hours?.openNow === false ? 'bg-red-100 text-red-900 ring-red-300' : 'bg-amber-100 text-amber-950 ring-amber-300'
+        }`}
+      >
+        <span aria-hidden="true">{hours?.openNow === false ? '🔴' : '⚠️'}</span>
+        <span className="flex-1">
+          {hours?.openNow === false ? 'Listed as closed now' : hours && hours.openNow == null ? 'Hours not listed' : 'May be closed or renamed'} · check Google Maps first
+        </span>
+        <span aria-hidden="true">↗</span>
+      </a>
 
       <div className="mt-auto flex gap-3 pt-3">
         <a

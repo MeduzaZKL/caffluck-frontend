@@ -16,7 +16,7 @@ export default function DetailsPanel({ sheet, onSheetChange, shop, route, routeL
   const touchY = useRef(null);
   const open = sheet !== 'closed';
   const mini = sheet === 'mini';
-  const height = sheet === 'expanded' ? 'h-[88dvh]' : mini ? 'h-[272px]' : 'h-[62dvh]';
+  const height = sheet === 'expanded' ? 'h-[88dvh]' : mini ? 'h-[326px]' : 'h-[62dvh]';
 
   const toggle = () => onSheetChange(sheet === 'expanded' ? 'peek' : sheet === 'mini' ? 'peek' : 'expanded');
   const onTouchEnd = (e) => {
