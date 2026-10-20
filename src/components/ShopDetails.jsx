@@ -67,7 +67,9 @@ export default function ShopDetails({ shop, route, routeLoading, userPos, onExpa
   const count = lines.reduce((n, l) => n + l.qty, 0);
   const total = lines.reduce((n, l) => n + l.qty * l.unit, 0);
 
-  const navigateUrl = `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=%3B${shop.lat}%2C${shop.lng}`;
+  // Google Maps turn-by-turn directions (no API key). The start point defaults to the user's current location,
+  // and it opens the Google Maps app on phones. Walking matches the walk-time shown on the card.
+  const navigateUrl = `https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lng}&travelmode=walking`;
   // Google Maps search link: no API key needed. Opens the cafe's Google listing (ratings, photos, menu, reviews).
   const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${shop.name} ${shop.lat},${shop.lng}`)}`;
   const photos = shop.photos ?? [];
