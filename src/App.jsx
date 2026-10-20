@@ -241,6 +241,7 @@ export default function App() {
         shop={selected}
         route={route}
         routeLoading={routeLoading}
+        userPos={geo.pos}
         busy={visitedBusy}
         onVisited={markVisited}
         onClose={deselect}

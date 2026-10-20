@@ -10,7 +10,7 @@ import ShopDetails from './ShopDetails';
  * `md:` utilities override the mobile ones (position, height, transform, radius, background),
  * so no JS and no duplicated markup is needed to switch between the two.
  */
-export default function DetailsPanel({ sheet, onSheetChange, shop, route, routeLoading, busy, onVisited, onClose, onRated }) {
+export default function DetailsPanel({ sheet, onSheetChange, shop, route, routeLoading, userPos, busy, onVisited, onClose, onRated }) {
   const touchY = useRef(null);
   const open = sheet !== 'closed';
   const height = sheet === 'expanded' ? 'h-[88dvh]' : 'h-[50dvh]';
@@ -49,6 +49,8 @@ export default function DetailsPanel({ sheet, onSheetChange, shop, route, routeL
             shop={shop}
             route={route}
             routeLoading={routeLoading}
+            userPos={userPos}
+            onExpand={() => onSheetChange('expanded')}
             busy={busy}
             onVisited={onVisited}
             onClose={onClose}

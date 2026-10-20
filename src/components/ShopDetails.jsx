@@ -7,6 +7,8 @@ import OrderModal from './OrderModal';
 import PhotoLightbox from './PhotoLightbox';
 import ReviewsPanel from './ReviewsPanel';
 import ReviewModal from './ReviewModal';
+import PickSignals from './PickSignals';
+import WhyThisPick from './WhyThisPick';
 import { api } from '../lib/api';
 import { formatPrice } from '../lib/format';
 
@@ -19,7 +21,7 @@ const CATEGORIES = [
  * Everything inside the details panel: header profile, category chips, menu grid, action bar.
  * Rendered with key={shop.id} by the parent, so the cart resets whenever the shop changes.
  */
-export default function ShopDetails({ shop, route, routeLoading, busy, onVisited, onClose, onRated }) {
+export default function ShopDetails({ shop, route, routeLoading, userPos, onExpand, busy, onVisited, onClose, onRated }) {
   const menu = shop.menu ?? null; // null while the menu is still loading
   const [category, setCategory] = useState('beverage');
   const [cart, setCart] = useState({}); // itemId -> { size, qty }
@@ -91,12 +93,6 @@ export default function ShopDetails({ shop, route, routeLoading, busy, onVisited
           {shop.reviewCount > 0
             ? `${shop.reviewCount} review${shop.reviewCount === 1 ? '' : 's'}`
             : 'No reviews yet'}
-          {shop.hours?.label && (
-            <>
-              {' · '}
-              <span className={`font-bold ${shop.hours.openNow ? 'text-mint' : 'text-red-300'}`}>{shop.hours.label}</span>
-            </>
-          )}
         </p>
         <div className="mt-3 hidden md:block">
           <TripMeta route={route} loading={routeLoading} variant="inline" />
@@ -106,6 +102,12 @@ export default function ShopDetails({ shop, route, routeLoading, busy, onVisited
 
       {/* Chips + menu */}
       <div className="flex min-h-0 flex-1 flex-col bg-forest pt-6 md:bg-cream">
+        {/* Decision signals + (after Randomize Me!) why this café was picked */}
+        <div className="shrink-0 pt-1">
+          <PickSignals shop={shop} route={route} userPos={userPos} onRate={() => setReviewOpen(true)} />
+          <WhyThisPick match={shop.match} onOpen={onExpand} />
+        </div>
+
         {/* Google-style quick actions */}
         <div className="no-scrollbar flex gap-2 overflow-x-auto px-5 pb-3">
           <button onClick={navigate} className="shrink-0 rounded-full bg-mint px-4 py-2 text-sm font-bold text-white shadow-sm">
