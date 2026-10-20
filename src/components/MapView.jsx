@@ -47,12 +47,13 @@ const userIcon = L.divIcon({
  *  - route:      { path: [lat,lng][], approx } | null  -> drawn as the navigation polyline
  *  - padding:    { top, right, bottom, left } px kept clear (e.g. under the bottom sheet) when fitting the route
  */
-export default function MapView({ userPos, shops, selectedId, route, padding, onSelect, onAreaMoved }) {
+export default function MapView({ userPos, shops, selectedId, route, routeLoading, padding, recenterSignal, onSelect, onAreaMoved }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
   const userMarkerRef = useRef(null);
   const markersRef = useRef(new Map()); // shopId -> { marker, cls }
   const routeLayerRef = useRef(null);
+  const previewLayerRef = useRef(null);
   const onSelectRef = useRef(onSelect);
   const paddingRef = useRef(padding);
   const onAreaMovedRef = useRef(onAreaMoved);
@@ -102,6 +103,7 @@ export default function MapView({ userPos, shops, selectedId, route, padding, on
       mapRef.current = null;
       userMarkerRef.current = null;
       routeLayerRef.current = null;
+      previewLayerRef.current = null;
       markersRef.current = new Map();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -170,6 +172,12 @@ export default function MapView({ userPos, shops, selectedId, route, padding, on
       dashArray: route.approx ? '2 10' : undefined,
     });
     routeLayerRef.current = L.layerGroup([casing, line]).addTo(map);
+    // Draw the real route in with a short "trace" animation (pathLength=1 lets CSS animate any length).
+    if (!route.approx && line.getElement()) {
+      const el = line.getElement();
+      el.setAttribute('pathLength', '1');
+      el.classList.add('caff-route-draw');
+    }
 
     quietUntilRef.current = Date.now() + 1500;
     const p = paddingRef.current;
@@ -180,6 +188,33 @@ export default function MapView({ userPos, shops, selectedId, route, padding, on
       animate: true,
     });
   }, [route]);
+
+  // --- instant dashed preview from you to the selected cafe while the real route is still loading ---
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (previewLayerRef.current) {
+      previewLayerRef.current.remove();
+      previewLayerRef.current = null;
+    }
+    const target = shops.find((s) => s.id === selectedId);
+    if (!routeLoading || !target) return;
+    const pts = [[userPos.lat, userPos.lng], [target.lat, target.lng]];
+    previewLayerRef.current = L.polyline(pts, { color: '#10B981', weight: 5, opacity: 0.9, dashArray: '6 12', lineCap: 'round', className: 'caff-preview-line' }).addTo(map);
+    quietUntilRef.current = Date.now() + 1500;
+    const p = paddingRef.current;
+    map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [p.left, p.top], paddingBottomRight: [p.right, p.bottom], maxZoom: 17, animate: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeLoading, selectedId]);
+
+  // --- "my location" button ---
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !recenterSignal) return;
+    quietUntilRef.current = Date.now() + 1500;
+    map.flyTo([userPos.lat, userPos.lng], Math.max(map.getZoom(), 16), { duration: 0.8 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recenterSignal]);
 
   // relative + z-0 gives Leaflet its own stacking context, so its internal z-indexes
   // (panes 200-700, controls 1000) can never paint over the app's floating UI.

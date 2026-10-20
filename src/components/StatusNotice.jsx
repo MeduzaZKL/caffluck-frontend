@@ -17,16 +17,16 @@ export default function StatusNotice({ kind, onRetry, onDismiss, retrying = fals
         <span className="text-2xl" aria-hidden="true">{c.icon}</span>
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-extrabold text-forest">{c.title}</h2>
-          <p className="mt-0.5 text-xs text-forest/70">{c.body}</p>
+          <p className="mt-0.5 text-xs text-forest/80">{c.body}</p>
         </div>
         {onDismiss && (
-          <button onClick={onDismiss} aria-label="Dismiss" className="text-forest/40 hover:text-forest">✕</button>
+          <button onClick={onDismiss} aria-label="Dismiss" className="flex h-10 w-10 items-center justify-center rounded-full text-forest/60 hover:text-forest active:scale-90">✕</button>
         )}
       </div>
       <button
         onClick={onRetry}
         disabled={retrying}
-        className="mt-3 w-full rounded-xl bg-forest py-2.5 text-sm font-bold text-white transition hover:bg-forest/90 disabled:opacity-60"
+        className="mt-3 w-full min-h-[48px] rounded-xl bg-forest py-2.5 text-sm font-bold text-white transition hover:bg-forest/90 active:scale-95 disabled:opacity-60"
       >
         {retrying ? 'Working…' : (c.action ?? '↻ Retry')}
       </button>

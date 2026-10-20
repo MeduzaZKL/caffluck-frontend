@@ -13,7 +13,7 @@ export default function CategoryChips({ chips, active, onChange }) {
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(chip.key)}
-            className={`shrink-0 snap-start whitespace-nowrap rounded-full bg-crisp px-4 py-2 text-sm font-semibold text-forest shadow-sm ring-2 transition ${
+            className={`shrink-0 snap-start whitespace-nowrap rounded-full bg-crisp min-h-[44px] px-4 py-2.5 text-sm font-semibold text-forest shadow-sm ring-2 transition active:scale-95 ${
               isActive ? 'ring-mint' : 'ring-transparent hover:ring-mint/40'
             }`}
           >

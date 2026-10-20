@@ -20,7 +20,7 @@ export default function ReviewsPanel({ shop, reviews, onWrite }) {
             <>
               <div className="text-3xl font-extrabold text-forest">{shop.rating.toFixed(1)}</div>
               <Stars value={Math.round(shop.rating)} />
-              <div className="text-xs text-forest/60">
+              <div className="text-xs text-forest/75">
                 {shop.reviewCount} review{shop.reviewCount === 1 ? '' : 's'}
               </div>
             </>
@@ -41,7 +41,7 @@ export default function ReviewsPanel({ shop, reviews, onWrite }) {
             <li key={r.id} className="rounded-2xl bg-crisp p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <Stars value={r.rating} />
-                <span className="text-xs text-forest/50">
+                <span className="text-xs text-forest/70">
                   {r.mine ? 'You · ' : ''}
                   {formatReviewDate(r.createdAt)}
                 </span>

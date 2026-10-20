@@ -13,7 +13,7 @@ export function walkInfo(shop, route, userPos) {
   return { distanceM: d, minutes: Math.max(1, Math.round((d * 1.25) / WALK_M_PER_MIN)), approx: true };
 }
 
-const pill = 'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold';
+const pill = 'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 py-2 text-xs font-bold';
 const neutral = `${pill} bg-white/15 text-white md:bg-crisp md:text-forest md:shadow-sm`;
 
 /**

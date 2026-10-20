@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import ShopDetails from './ShopDetails';
+import MiniSummary from './MiniSummary';
 
 /**
  * ONE <aside> that is two layouts, switched purely by Tailwind breakpoints:
@@ -13,15 +14,20 @@ import ShopDetails from './ShopDetails';
 export default function DetailsPanel({ sheet, onSheetChange, shop, route, routeLoading, userPos, busy, onVisited, onClose, onRated }) {
   const touchY = useRef(null);
   const open = sheet !== 'closed';
-  const height = sheet === 'expanded' ? 'h-[88dvh]' : 'h-[50dvh]';
+  const mini = sheet === 'mini';
+  const height = sheet === 'expanded' ? 'h-[88dvh]' : mini ? 'h-[272px]' : 'h-[62dvh]';
 
-  const toggle = () => onSheetChange(sheet === 'expanded' ? 'peek' : 'expanded');
+  const toggle = () => onSheetChange(sheet === 'expanded' ? 'peek' : sheet === 'mini' ? 'peek' : 'expanded');
   const onTouchEnd = (e) => {
     if (touchY.current == null) return;
     const dy = e.changedTouches[0].clientY - touchY.current;
     touchY.current = null;
-    if (dy < -40) onSheetChange('expanded');
-    else if (dy > 40) (sheet === 'expanded' ? onSheetChange('peek') : onClose());
+    if (dy < -40) onSheetChange(sheet === 'mini' ? 'peek' : 'expanded');
+    else if (dy > 40) {
+      if (sheet === 'expanded') onSheetChange('peek');
+      else if (sheet === 'peek') onSheetChange('mini');
+      else onClose();
+    }
   };
 
   return (
@@ -37,13 +43,26 @@ export default function DetailsPanel({ sheet, onSheetChange, shop, route, routeL
         onTouchStart={(e) => (touchY.current = e.touches[0].clientY)}
         onTouchEnd={onTouchEnd}
         aria-label={sheet === 'expanded' ? 'Collapse details' : 'Expand details'}
-        className="flex w-full shrink-0 justify-center bg-forest pb-1.5 pt-3 md:hidden"
+        className="flex h-9 w-full shrink-0 items-center justify-center bg-forest md:hidden"
       >
-        <span className="h-1.5 w-12 rounded-full bg-white/40" />
+        <span className="h-1.5 w-14 rounded-full bg-white/60" />
       </button>
 
       {shop ? (
         <div className="min-h-0 flex-1">
+          {mini && (
+            <div className="h-full md:hidden">
+              <MiniSummary
+                shop={shop}
+                route={route}
+                routeLoading={routeLoading}
+                userPos={userPos}
+                onDetails={() => onSheetChange('peek')}
+                onClose={onClose}
+              />
+            </div>
+          )}
+          <div className={`h-full ${mini ? 'max-md:hidden' : ''}`}>
           <ShopDetails
             key={shop.id}
             shop={shop}
@@ -56,6 +75,7 @@ export default function DetailsPanel({ sheet, onSheetChange, shop, route, routeL
             onClose={onClose}
             onRated={onRated}
           />
+          </div>
         </div>
       ) : (
         // Desktop empty state (the mobile sheet is closed when nothing is selected)

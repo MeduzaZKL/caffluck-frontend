@@ -1,8 +1,8 @@
 import { WALK_OPTIONS, FEATURE_FILTERS, activeFilterCount } from '../lib/filters';
 
 const chip =
-  'pointer-events-auto inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3.5 py-2 text-xs font-bold shadow-md ring-1 transition active:scale-95';
-const off = 'bg-crisp text-forest ring-forest/10 hover:bg-cream';
+  'pointer-events-auto inline-flex shrink-0 items-center gap-1 whitespace-nowrap min-h-[44px] rounded-full px-4 py-2 text-[13px] font-bold shadow-md ring-1 transition active:scale-95 md:min-h-0 md:px-3.5 md:text-xs';
+const off = 'bg-crisp text-forest ring-forest/20 hover:bg-cream';
 const on = 'bg-forest text-white ring-forest';
 
 /**

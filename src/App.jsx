@@ -12,6 +12,7 @@ import { SEARCH_RADIUS_M } from './lib/config';
 import { loadFilters, saveFilters, matchesFilters, serverFilters, activeFilterCount } from './lib/filters';
 import { useGeolocation } from './hooks/useGeolocation';
 import { useMediaQuery } from './hooks/useMediaQuery';
+import { haptic } from './lib/links';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -41,6 +42,10 @@ export default function App() {
     saveFilters(next);
     setNotice((n) => (n?.kind === 'nomatch' ? null : n));
   }, []);
+
+  const [rollDone, setRollDone] = useState(false); // brief "Found one!" success state on the roll button
+  const [recenter, setRecenter] = useState(0); // bump to fly the map back to the user
+  const [hint, setHint] = useState(false); // first-visit gesture hint (phones)
 
   const detailCtrl = useRef(null);
   const showToast = useCallback((message) => setToast({ id: Date.now(), message }), []);
@@ -112,6 +117,28 @@ export default function App() {
     return () => ctrl.abort();
   }, [selectedId, selectedLat, selectedLng, lat, lng]);
 
+  // One-time gesture hint on phones: shown once, gone after any interaction or 9 s.
+  useEffect(() => {
+    let seen = true;
+    try {
+      seen = localStorage.getItem('caffluck.hint.v1') === '1';
+    } catch {
+      /* storage blocked: skip the hint rather than nag every visit */
+    }
+    if (seen || isDesktop || shopsLoading || shops.length === 0) return undefined;
+    setHint(true);
+    const t = setTimeout(() => setHint(false), 9000);
+    return () => clearTimeout(t);
+  }, [isDesktop, shopsLoading, shops.length === 0]);
+  const dismissHint = useCallback(() => {
+    setHint(false);
+    try {
+      localStorage.setItem('caffluck.hint.v1', '1');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   // Pins that pass the filter bar (the open cafe always keeps its pin).
   const userPos = geo.pos;
   const visibleShops = useMemo(
@@ -132,7 +159,8 @@ export default function App() {
       const basic = shops.find((s) => s.id === id);
       if (!basic) return;
       setSelected(basic);
-      setSheet((s) => (s === 'closed' ? 'peek' : s));
+      setSheet((s) => (s === 'closed' ? 'mini' : s));
+      dismissHint();
       detailCtrl.current?.abort();
       const ctrl = new AbortController();
       detailCtrl.current = ctrl;
@@ -143,12 +171,14 @@ export default function App() {
           if (err.name !== 'AbortError') showToast(`Couldn't load the menu: ${err.message}`);
         });
     },
-    [shops, showToast],
+    [shops, showToast, dismissHint],
   );
 
   // --- "Randomize Me!" ---
   const roll = async () => {
     if (!geo.pos || rolling) return;
+    haptic(12);
+    dismissHint();
     setRolling(true);
     setNotice(null);
     try {
@@ -158,6 +188,9 @@ export default function App() {
         setShops((prev) => (prev.some((s) => s.id === res.shop.id) ? prev : [...prev, res.shop]));
         setSelected(res.shop);
         setSheet('peek');
+        haptic([20, 40, 30]);
+        setRollDone(true);
+        setTimeout(() => setRollDone(false), 1400);
       } else if (res.status === 'all_visited') {
         showToast("You've been to every cafe around here! 🎉 Come back when new ones open.");
       } else if (res.status === 'no_match') {
@@ -238,7 +271,7 @@ export default function App() {
     () =>
       isDesktop
         ? { top: 70, right: 60, bottom: 110, left: 60 }
-        : { top: 110, right: 28, bottom: Math.round(window.innerHeight * (sheet === 'expanded' ? 0.88 : 0.5)) + 24, left: 28 },
+        : { top: 130, right: 28, bottom: (sheet === 'mini' ? 272 : Math.round(window.innerHeight * (sheet === 'expanded' ? 0.88 : 0.62))) + 24, left: 28 },
     [isDesktop, sheet],
   );
 
@@ -251,7 +284,7 @@ export default function App() {
     );
   }
 
-  const rollBottom = sheet === 'closed' ? 'bottom-6' : 'bottom-[calc(50dvh+1rem)]';
+  const rollBottom = sheet === 'closed' ? 'bottom-6' : sheet === 'mini' ? 'bottom-[calc(272px+1rem)]' : 'bottom-[calc(62dvh+1rem)]';
 
   return (
     <div className="app-root flex h-screen w-screen flex-col overflow-hidden bg-cream font-sans md:flex-row">
@@ -275,6 +308,8 @@ export default function App() {
           shops={visibleShops}
           selectedId={selectedId}
           route={route}
+          routeLoading={routeLoading}
+          recenterSignal={recenter}
           padding={padding}
           onSelect={selectShop}
           onAreaMoved={setAreaView}
@@ -338,16 +373,42 @@ export default function App() {
           </button>
         )}
 
-        {/* Randomize button */}
+        {/* First-visit gesture hint (phones) */}
+        {hint && sheet === 'closed' && (
+          <button
+            onClick={dismissHint}
+            className="caff-hint absolute bottom-[5.75rem] left-1/2 z-20 w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 rounded-2xl bg-forest px-4 py-3 text-center text-sm font-semibold text-white shadow-2xl md:hidden"
+          >
+            👆 Tap a pin, or hit <strong>Randomize Me!</strong>
+            <span className="mt-0.5 block text-xs font-medium text-white/80">Drag &amp; pinch to explore · tap to dismiss</span>
+          </button>
+        )}
+
+        {/* "My location" */}
         <button
-          onClick={roll}
-          disabled={rolling}
-          className={`absolute left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-forest px-7 py-3.5 text-base font-extrabold text-white shadow-xl shadow-forest/30 transition-all duration-300 hover:bg-forest/90 active:scale-95 disabled:opacity-80 md:bottom-8 ${rollBottom} ${
+          onClick={() => {
+            haptic(10);
+            setRecenter((n) => n + 1);
+          }}
+          aria-label="Center the map on my location"
+          className={`absolute right-4 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-crisp text-xl text-forest shadow-xl ring-1 ring-forest/15 transition-all duration-300 active:scale-90 md:bottom-32 md:right-3 md:h-10 md:w-10 md:text-base ${rollBottom} ${
             sheet === 'expanded' ? 'max-md:hidden' : ''
           }`}
         >
-          <span className={`mr-2 inline-block ${rolling ? 'animate-spin' : ''}`}>🎲</span>
-          {rolling ? (slow ? 'Waking the server…' : 'Rolling…') : 'Randomize Me!'}
+          ➤
+        </button>
+
+        {/* Randomize button: breathes when idle, shimmers while rolling, flashes green when it found one */}
+        <button
+          onClick={roll}
+          disabled={rolling}
+          aria-live="polite"
+          className={`absolute left-1/2 z-10 min-h-[56px] -translate-x-1/2 whitespace-nowrap rounded-full bg-forest px-8 py-3.5 text-lg font-extrabold text-white shadow-xl shadow-forest/30 transition-[bottom,transform,background-color] duration-300 hover:bg-forest/90 active:scale-95 disabled:opacity-100 md:bottom-8 md:text-base ${rollBottom} ${
+            sheet === 'expanded' ? 'max-md:hidden' : ''
+          } ${rolling ? 'caff-cta-rolling' : rollDone ? 'caff-cta-success' : sheet === 'closed' ? 'caff-cta-idle' : ''}`}
+        >
+          <span className={`mr-2 inline-block ${rolling ? 'animate-spin' : ''}`}>{rollDone ? '🎯' : '🎲'}</span>
+          {rolling ? (slow ? 'Waking the server…' : 'Rolling…') : rollDone ? 'Found your café!' : 'Randomize Me!'}
         </button>
       </main>
 

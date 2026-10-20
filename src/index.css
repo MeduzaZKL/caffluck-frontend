@@ -130,3 +130,109 @@ body {
   /* white halo keeps the text readable over the map, like Google Maps */
   text-shadow: -1.5px 0 #fff, 1.5px 0 #fff, 0 -1.5px #fff, 0 1.5px #fff, 0 0 4px #fff;
 }
+
+/* ---------- Mobile guidance + motion ---------- */
+/* Selected pin "lands" with a little bounce */
+.caff-pin.is-selected {
+  animation: caff-land 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes caff-land {
+  0% {
+    transform: translateY(-14px) scale(0.9);
+  }
+  100% {
+    transform: translateY(0) scale(1.25);
+  }
+}
+
+/* Route preview: marching dashes while the real route loads, then the route traces itself in */
+.caff-preview-line {
+  animation: caff-march 0.9s linear infinite;
+}
+@keyframes caff-march {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+.caff-route-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: caff-trace 0.9s ease-out forwards;
+}
+@keyframes caff-trace {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Randomize Me! button: breathes when idle, shimmers while rolling, flashes on success */
+.caff-cta-idle {
+  animation: caff-breathe 2.4s ease-in-out infinite;
+}
+@keyframes caff-breathe {
+  0%,
+  100% {
+    box-shadow: 0 10px 25px rgba(0, 75, 52, 0.3), 0 0 0 0 rgba(16, 185, 129, 0.55);
+  }
+  50% {
+    box-shadow: 0 10px 25px rgba(0, 75, 52, 0.3), 0 0 0 14px rgba(16, 185, 129, 0);
+  }
+}
+.caff-cta-rolling {
+  background-image: linear-gradient(110deg, #004b34 30%, #0f7a58 50%, #004b34 70%);
+  background-size: 200% 100%;
+  animation: caff-shimmer 1s linear infinite;
+}
+@keyframes caff-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+.caff-cta-success {
+  background: #10b981 !important;
+  animation: caff-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes caff-pop {
+  0% {
+    transform: translateX(-50%) scale(0.92);
+  }
+  60% {
+    transform: translateX(-50%) scale(1.08);
+  }
+  100% {
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+/* First-visit gesture hint */
+.caff-hint {
+  animation: caff-float 2s ease-in-out infinite;
+}
+@keyframes caff-float {
+  50% {
+    transform: translate(-50%, -6px);
+  }
+}
+
+/* Keep keyboard users oriented */
+button:focus-visible,
+a:focus-visible,
+select:focus-visible {
+  outline: 3px solid #10b981;
+  outline-offset: 2px;
+}
+
+/* Respect "reduce motion" */
+@media (prefers-reduced-motion: reduce) {
+  .caff-cta-idle,
+  .caff-cta-rolling,
+  .caff-hint,
+  .caff-preview-line,
+  .caff-pin.is-selected {
+    animation: none !important;
+  }
+  .caff-route-draw {
+    animation: none !important;
+    stroke-dashoffset: 0;
+  }
+}

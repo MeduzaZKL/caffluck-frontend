@@ -32,7 +32,7 @@ export default function ReviewModal({ shop, onClose, onSaved, title = 'Rate this
     >
       <div className="w-full max-w-md rounded-3xl bg-crisp p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-extrabold text-forest">{title}</h2>
-        <p className="text-sm text-forest/60">{shop.name}</p>
+        <p className="text-sm text-forest/75">{shop.name}</p>
 
         <div className="mt-4 flex justify-center gap-1" role="radiogroup" aria-label="Star rating">
           {[1, 2, 3, 4, 5].map((n) => (
@@ -56,7 +56,7 @@ export default function ReviewModal({ shop, onClose, onSaved, title = 'Rate this
           placeholder="Share a short note (optional)"
           className="mt-4 w-full resize-none rounded-xl border border-forest/15 bg-cream p-3 text-sm text-forest outline-none focus:border-mint"
         />
-        <div className="text-right text-xs text-forest/50">{comment.length}/280</div>
+        <div className="text-right text-xs text-forest/70">{comment.length}/280</div>
         {error && <p className="mt-1 text-sm font-semibold text-red-600">{error}</p>}
 
         <div className="mt-3 flex gap-3">

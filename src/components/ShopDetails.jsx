@@ -11,6 +11,7 @@ import PickSignals from './PickSignals';
 import WhyThisPick from './WhyThisPick';
 import { api } from '../lib/api';
 import { formatPrice } from '../lib/format';
+import { googleDirectionsUrl, googleListingUrl, haptic } from '../lib/links';
 
 const CATEGORIES = [
   { key: 'beverage', label: 'Beverages', emoji: '☕' },
@@ -67,13 +68,13 @@ export default function ShopDetails({ shop, route, routeLoading, userPos, onExpa
   const count = lines.reduce((n, l) => n + l.qty, 0);
   const total = lines.reduce((n, l) => n + l.qty * l.unit, 0);
 
-  // Google Maps turn-by-turn directions (no API key). The start point defaults to the user's current location,
-  // and it opens the Google Maps app on phones. Walking matches the walk-time shown on the card.
-  const navigateUrl = `https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lng}&travelmode=walking`;
-  // Google Maps search link: no API key needed. Opens the cafe's Google listing (ratings, photos, menu, reviews).
-  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${shop.name} ${shop.lat},${shop.lng}`)}`;
+  const navigateUrl = googleDirectionsUrl(shop);
+  const googleMapsUrl = googleListingUrl(shop);
   const photos = shop.photos ?? [];
-  const navigate = () => window.open(navigateUrl, '_blank', 'noopener');
+  const navigate = () => {
+    haptic(15);
+    window.open(navigateUrl, '_blank', 'noopener');
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -82,7 +83,7 @@ export default function ShopDetails({ shop, route, routeLoading, userPos, onExpa
         <button
           onClick={onClose}
           aria-label="Close details"
-          className="absolute right-4 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm md:hidden"
+          className="absolute right-3 top-1 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-base active:scale-90 md:hidden"
         >
           ✕
         </button>
@@ -90,8 +91,8 @@ export default function ShopDetails({ shop, route, routeLoading, userPos, onExpa
           Your pick
         </p>
         <h2 className="pr-24 text-2xl font-extrabold leading-tight">{shop.name}</h2>
-        <p className="mt-1 pr-24 text-sm text-white/70">{shop.address}</p>
-        <p className="mt-1 text-xs text-white/70">
+        <p className="mt-1 pr-24 text-sm text-white/85">{shop.address}</p>
+        <p className="mt-1 text-xs text-white/85">
           {shop.reviewCount > 0
             ? `${shop.reviewCount} review${shop.reviewCount === 1 ? '' : 's'}`
             : 'No reviews yet'}
@@ -112,28 +113,28 @@ export default function ShopDetails({ shop, route, routeLoading, userPos, onExpa
 
         {/* Google-style quick actions */}
         <div className="no-scrollbar flex gap-2 overflow-x-auto px-5 pb-3">
-          <button onClick={navigate} className="shrink-0 rounded-full bg-mint px-4 py-2 text-sm font-bold text-white shadow-sm">
+          <button onClick={navigate} className="shrink-0 inline-flex min-h-[44px] items-center rounded-full bg-mint px-5 text-sm font-bold text-white shadow-sm transition active:scale-95">
             ➤ Directions
           </button>
           <a
             href={googleMapsUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="shrink-0 rounded-full bg-crisp px-4 py-2 text-sm font-semibold text-forest shadow-sm"
+            className="shrink-0 inline-flex min-h-[44px] items-center rounded-full bg-crisp px-4 text-sm font-semibold text-forest shadow-sm transition active:scale-95"
           >
             🗺️ Google Maps
           </a>
           {shop.phone && (
-            <a href={`tel:${shop.phone.replace(/[^+\d]/g, '')}`} className="shrink-0 rounded-full bg-crisp px-4 py-2 text-sm font-semibold text-forest shadow-sm">
+            <a href={`tel:${shop.phone.replace(/[^+\d]/g, '')}`} className="shrink-0 inline-flex min-h-[44px] items-center rounded-full bg-crisp px-4 text-sm font-semibold text-forest shadow-sm transition active:scale-95">
               📞 Call
             </a>
           )}
           {shop.website && (
-            <a href={shop.website} target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-full bg-crisp px-4 py-2 text-sm font-semibold text-forest shadow-sm">
+            <a href={shop.website} target="_blank" rel="noopener noreferrer" className="shrink-0 inline-flex min-h-[44px] items-center rounded-full bg-crisp px-4 text-sm font-semibold text-forest shadow-sm transition active:scale-95">
               🌐 Website
             </a>
           )}
-          <button onClick={() => setReviewOpen(true)} className="shrink-0 rounded-full bg-crisp px-4 py-2 text-sm font-semibold text-forest shadow-sm">
+          <button onClick={() => setReviewOpen(true)} className="shrink-0 inline-flex min-h-[44px] items-center rounded-full bg-crisp px-4 text-sm font-semibold text-forest shadow-sm transition active:scale-95">
             ★ Rate
           </button>
         </div>
@@ -165,8 +166,8 @@ export default function ShopDetails({ shop, route, routeLoading, userPos, onExpa
               role="tab"
               aria-selected={tab === key}
               onClick={() => setTab(key)}
-              className={`-mb-px border-b-2 pb-2 text-sm font-bold ${
-                tab === key ? 'border-mint text-white md:text-forest' : 'border-transparent text-white/60 md:text-forest/50'
+              className={`-mb-px border-b-2 py-3 text-sm font-bold ${
+                tab === key ? 'border-mint text-white md:text-forest' : 'border-transparent text-white/75 md:text-forest/70'
               }`}
             >
               {label}
@@ -234,9 +235,9 @@ export default function ShopDetails({ shop, route, routeLoading, userPos, onExpa
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-bold text-forest">📋 View the menu board</span>
-                    <span className="block text-xs text-forest/60">Tap to see {shop.name}'s actual menu</span>
+                    <span className="block text-xs text-forest/75">Tap to see {shop.name}'s actual menu</span>
                   </span>
-                  <span className="pr-2 text-forest/40" aria-hidden="true">›</span>
+                  <span className="pr-2 text-forest/60" aria-hidden="true">›</span>
                 </button>
               )}
 
@@ -262,15 +263,21 @@ export default function ShopDetails({ shop, route, routeLoading, userPos, onExpa
       {/* Action bar */}
       <div className="flex gap-3 border-t border-forest/10 bg-crisp px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
         <button
-          onClick={onVisited}
+          onClick={() => {
+            haptic(20);
+            onVisited();
+          }}
           disabled={busy || shop.visited}
-          className="flex-1 rounded-xl bg-mint py-3 text-sm font-bold text-white transition enabled:hover:brightness-95 disabled:opacity-60"
+          className={`flex min-h-[52px] flex-1 items-center justify-center gap-2 rounded-2xl text-sm font-extrabold text-white transition active:scale-95 disabled:active:scale-100 ${
+            shop.visited ? 'bg-forest/70' : 'bg-mint shadow-lg shadow-mint/30 enabled:hover:brightness-95'
+          } ${busy ? 'opacity-80' : ''}`}
         >
-          {shop.visited ? '✓ Already visited' : busy ? 'Saving…' : '✓ I Already Go There'}
+          {busy && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" aria-hidden="true" />}
+          {shop.visited ? '✓ Saved · won’t show again' : busy ? 'Saving…' : '✓ I Already Go There'}
         </button>
         <button
           onClick={count > 0 ? () => setOrderOpen(true) : navigate}
-          className="flex-[1.3] rounded-xl bg-forest py-3 text-sm font-bold text-white transition hover:bg-forest/90"
+          className="flex min-h-[52px] flex-[1.3] items-center justify-center rounded-2xl bg-forest text-sm font-extrabold text-white shadow-lg shadow-forest/30 transition hover:bg-forest/90 active:scale-95"
         >
           {count > 0 ? `Place Order · ${formatPrice(total)} (${count})` : 'Navigate →'}
         </button>

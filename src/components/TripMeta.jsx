@@ -15,26 +15,34 @@ export default function TripMeta({ route, loading, variant = 'card' }) {
   if (loading) {
     return (
       <div className={wrapper} role="status">
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${pill}`}>Calculating route…</span>
+        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${pill}`}>
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+          Plotting your route…
+        </span>
       </div>
     );
   }
   if (!route) return null;
 
+  // Walking time from the real road distance (~4.8 km/h), matching the Google Maps walking directions.
+  const walkS = route.distanceM / (80 / 60);
   const approx = route.approx ? '~' : '';
   return (
     <div className={wrapper}>
-      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${pill}`}>
-        ⏱ Estimated Time: {approx}
-        {etaRange(route.durationS)}
+      {!route.approx && (
+        <span className="rounded-full bg-mint px-3 py-1.5 text-xs font-bold text-white">✓ Route ready</span>
+      )}
+      <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${pill}`}>
+        🚶 {approx}
+        {etaRange(walkS)} walk
       </span>
-      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${pill}`}>
+      <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${pill}`}>
         📍 {approx}
         {formatDistance(route.distanceM)}
       </span>
       {route.approx && (
-        <span className={`rounded-full px-3 py-1 text-xs font-medium ${card ? 'text-forest/60' : 'text-white/60'}`}>
-          straight-line estimate
+        <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${card ? 'bg-amber-100 text-amber-900' : 'bg-amber-300/20 text-amber-200'}`}>
+          Straight-line preview — route service is busy
         </span>
       )}
     </div>

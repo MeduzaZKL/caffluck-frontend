@@ -74,7 +74,7 @@ export default function MenuCard({ item, line, onChange, onPhoto }) {
               onClick={() => onChange({ qty: Math.max(0, qty - 1) })}
               disabled={qty === 0}
               aria-label={`Remove one ${item.name}`}
-              className="h-8 w-8 rounded-full bg-cream text-lg font-bold leading-none text-forest transition enabled:hover:bg-forest/10 disabled:opacity-40"
+              className="h-10 w-10 rounded-full bg-cream text-xl font-bold leading-none text-forest transition active:scale-90 enabled:hover:bg-forest/10 disabled:opacity-40"
             >
               −
             </button>
@@ -84,7 +84,7 @@ export default function MenuCard({ item, line, onChange, onPhoto }) {
             <button
               onClick={() => onChange({ qty: qty + 1 })}
               aria-label={`Add one ${item.name}`}
-              className="h-8 w-8 rounded-full bg-forest text-lg font-bold leading-none text-white transition hover:bg-forest/90"
+              className="h-10 w-10 rounded-full bg-forest text-xl font-bold leading-none text-white transition active:scale-90 hover:bg-forest/90"
             >
               +
             </button>
